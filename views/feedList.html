@@ -1,0 +1,21 @@
+<h1>All Feeds</h1>
+
+<form method="POST">
+    <label>
+        RSS-URL:
+        <input type="url" name="url" />
+    </label>
+    <button>Add Feed</button>
+</form>
+
+{{ range .Feeds }}
+<article>
+    {{ if .ImageUrl }}
+    <img src="{{ .ImageUrl }}" alt="{{ .ImageTitle }}" height="24" />
+    {{ end }}
+    <h2>{{ .Title }}</h2>
+    <a href="{{ .Link }}">RSS Feed</a>
+    <p>{{ .Description }}</p>
+    <a href="feed/{{ pathEscape .Title }}">Edit Feed</a>
+</article>
+{{ end }}

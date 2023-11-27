@@ -1,0 +1,11 @@
+<header>
+    {{ if .Post.ImageUrl }}
+    <img src="{{ .Post.ImageUrl }}" alt="" width="400" height="300" style="object-fit: cover;" />
+    {{ end }}
+    <h1><a href="{{ .Post.Link }}">{{ .Post.Title }}</a></h1>
+    <p>By {{ .Post.Author }} in {{ .Post.FeedTitle }} at <time>{{ .Post.PublicationDate }}</time>
+    </p>
+</header>
+<article>
+    {{ .Content }}
+</article>

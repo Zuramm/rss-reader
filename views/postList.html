@@ -1,0 +1,46 @@
+<h1>Posts</h1>
+
+<form>
+    <label>Feed Category:
+        <select name="feedCategory" multiple>
+            {{ range .FeedCategories }}
+            <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
+            {{ end }}
+        </select>
+    </label>
+    <label>Feed:
+        <select name="feed" multiple>
+            {{ range .Feeds }}
+            <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
+            {{ end }}
+        </select>
+    </label>
+    <label>Post Category:
+        <select name="postCategory" multiple>
+            {{ range .PostCategories }}
+            <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
+            {{ end }}
+        </select>
+    </label>
+    <label>Older than:
+        <input type="date" pattern="\d{4}-\d{2}-\d{2}" name="olderThan" value="{{ .OlderThan }}" />
+    </label>
+    <input type="search" name="query" value="{{ .Query }}" />
+    <button>Search</button>
+</form>
+
+{{ range .Posts }}
+<article>
+    <header>
+        {{ if .ImageUrl }}
+        <img src="{{ .ImageUrl }}" alt="" loading="lazy" width="400" height="300" style="object-fit: cover;" />
+        {{ end }}
+        <a href="post/{{ pathEscape .GUID }}">
+            <h2>{{ if not .IsRead }}<span>new*</span> {{ end }}{{ .Title }}</h2>
+        </a>
+        <p>By {{ .Author }} in {{ .FeedTitle }} at <time>{{ .PublicationDate }}</time>
+        </p>
+    </header>
+    <p>{{ htmlSafe .Excerpt }}</p>
+</article>
+{{ end }}
