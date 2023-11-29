@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/url"
+	"strings"
 	"time"
 
 	readability "github.com/go-shiori/go-readability"
@@ -209,6 +210,14 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 	}
 }
 
+func convertArgs(args []string) []interface{} {
+	ifaces := make([]interface{}, len(args))
+	for i, v := range args {
+		ifaces[i] = v
+	}
+	return ifaces
+}
+
 func main() {
 	feedParser := gofeed.NewParser()
 
@@ -278,7 +287,7 @@ func main() {
 	}
 	defer allPostCategoriesQuery.Close()
 
-	allPostsQuery, err := db.Prepare(`
+	allPostQueryStr := `
         SELECT
             GUID,
             Title,
@@ -290,58 +299,31 @@ func main() {
             ImageUrl
         FROM
             Post
+        %s
         ORDER BY
             PublicationDate DESC;
-    `)
-	if err != nil {
-		log.Fatalf("main: prepare all posts query: %v", err)
-	}
-	defer allPostsQuery.Close()
+    `
+
+	allPostQueryFeedCategoryStr := `
+        FeedTitle IN(
+            SELECT
+                FeedTitle FROM FeedCategory
+            WHERE
+                Category IN(%s))
+    `
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		query := c.Context().QueryArgs()
-
-		rows, err := allPostsQuery.Query()
-		if err != nil {
-			log.Printf("GET /: get all posts: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Getting Posts"})
-		}
-		defer rows.Close()
-
-		var posts []Post
-
-		for rows.Next() {
-			var post Post
-			var author, excerpt, imageUrl *string
-			err := rows.Scan(&post.GUID, &post.Title, &excerpt, &post.PublicationDate, &post.IsRead, &author, &post.FeedTitle, &imageUrl)
-			if err != nil {
-				log.Printf("GET /: get post data: %v", err)
-				continue
-			}
-
-			if author != nil {
-				post.Author = *author
-			}
-
-			if excerpt != nil {
-				post.Excerpt = *excerpt
-			}
-
-			if imageUrl != nil {
-				post.ImageUrl = *imageUrl
-			}
-
-			posts = append(posts, post)
-		}
 
 		type TitleSelected struct {
 			Title    string
 			Selected bool
 		}
 
+		var selectedFeedCategories []string
 		var feeds, feedCategories, postCategories []TitleSelected
 
-		rows, err = allFeedsTitle.Query()
+		rows, err := allFeedsTitle.Query()
 		if err != nil {
 			log.Printf("GET /: get all feeds")
 		} else {
@@ -385,6 +367,10 @@ func main() {
 					}
 				}
 
+				if isSet {
+					selectedFeedCategories = append(selectedFeedCategories, category)
+				}
+
 				feedCategories = append(feedCategories, TitleSelected{category, isSet})
 			}
 		}
@@ -411,6 +397,56 @@ func main() {
 
 				postCategories = append(postCategories, TitleSelected{category, isSet})
 			}
+		}
+
+		// TODO: Figure out exclusivity between feed category and feed title
+		// Maybe ignore feed title if feed category is set
+		// Maybe set the feed titles which are in the category
+		// TODO: Dynamically generate query string
+
+		wherestr := ""
+
+		if len(selectedFeedCategories) > 0 {
+			wherestr += "WHERE"
+
+			placeholders := strings.Repeat("?,", len(selectedFeedCategories)-1) + "?"
+
+			wherestr += fmt.Sprintf(allPostQueryFeedCategoryStr, placeholders)
+		}
+
+		querystr := fmt.Sprintf(allPostQueryStr, wherestr)
+
+		rows, err = db.Query(querystr, convertArgs(selectedFeedCategories)...)
+		if err != nil {
+			log.Printf("GET /: get all posts: %v", err)
+			return c.Render("error", fiber.Map{"Error": "Failed Getting Posts"})
+		}
+		defer rows.Close()
+
+		var posts []Post
+
+		for rows.Next() {
+			var post Post
+			var author, excerpt, imageUrl *string
+			err := rows.Scan(&post.GUID, &post.Title, &excerpt, &post.PublicationDate, &post.IsRead, &author, &post.FeedTitle, &imageUrl)
+			if err != nil {
+				log.Printf("GET /: get post data: %v", err)
+				continue
+			}
+
+			if author != nil {
+				post.Author = *author
+			}
+
+			if excerpt != nil {
+				post.Excerpt = *excerpt
+			}
+
+			if imageUrl != nil {
+				post.ImageUrl = *imageUrl
+			}
+
+			posts = append(posts, post)
 		}
 
 		// Render with and extends
