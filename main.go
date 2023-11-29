@@ -304,6 +304,10 @@ func main() {
             PublicationDate DESC;
     `
 
+	allPostQueryFeedTitleStr := `
+        FeedTitle IN(%s)
+    `
+
 	allPostQueryFeedCategoryStr := `
         FeedTitle IN(
             SELECT
@@ -320,7 +324,7 @@ func main() {
 			Selected bool
 		}
 
-		var selectedFeedCategories []string
+		var selectedFeedTitles, selectedFeedCategories []string
 		var feeds, feedCategories, postCategories []TitleSelected
 
 		rows, err := allFeedsTitle.Query()
@@ -341,6 +345,10 @@ func main() {
 						isSet = true
 						break
 					}
+				}
+
+				if isSet {
+					selectedFeedTitles = append(selectedFeedTitles, feed)
 				}
 
 				feeds = append(feeds, TitleSelected{feed, isSet})
@@ -399,24 +407,34 @@ func main() {
 			}
 		}
 
-		// TODO: Figure out exclusivity between feed category and feed title
-		// Maybe ignore feed title if feed category is set
-		// Maybe set the feed titles which are in the category
-		// TODO: Dynamically generate query string
-
 		wherestr := ""
+		var values []interface{}
+
+		if len(selectedFeedTitles) > 0 {
+			wherestr += "WHERE "
+
+			placeholders := strings.Repeat("?,", len(selectedFeedTitles)-1) + "?"
+
+			wherestr += fmt.Sprintf(allPostQueryFeedTitleStr, placeholders)
+			values = append(values, convertArgs(selectedFeedTitles)...)
+		}
 
 		if len(selectedFeedCategories) > 0 {
-			wherestr += "WHERE"
+			if len(wherestr) == 0 {
+				wherestr += "WHERE "
+			} else {
+				wherestr += " AND "
+			}
 
 			placeholders := strings.Repeat("?,", len(selectedFeedCategories)-1) + "?"
 
 			wherestr += fmt.Sprintf(allPostQueryFeedCategoryStr, placeholders)
+			values = append(values, convertArgs(selectedFeedCategories)...)
 		}
 
 		querystr := fmt.Sprintf(allPostQueryStr, wherestr)
 
-		rows, err = db.Query(querystr, convertArgs(selectedFeedCategories)...)
+		rows, err = db.Query(querystr, values...)
 		if err != nil {
 			log.Printf("GET /: get all posts: %v", err)
 			return c.Render("error", fiber.Map{"Error": "Failed Getting Posts"})
