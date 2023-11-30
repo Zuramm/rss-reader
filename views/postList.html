@@ -22,8 +22,9 @@
             {{ end }}
         </select>
     </label>
-    <label>Older than:
-        <input type="date" pattern="\d{4}-\d{2}-\d{2}" name="olderThan" value="{{ .OlderThan }}" />
+    <label>
+        <input type="checkbox" name="oldestFirst" {{- if .OldestFirst }} checked{{ end }} />
+        Oldest first
     </label>
     <input type="search" name="query" value="{{ .Query }}" />
     <button>Search</button>

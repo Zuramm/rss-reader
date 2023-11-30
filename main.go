@@ -300,8 +300,7 @@ func main() {
         FROM
             Post
         %s
-        ORDER BY
-            PublicationDate DESC;
+        %s;
     `
 
 	allPostQueryFeedTitleStr := `
@@ -322,6 +321,16 @@ func main() {
                 PostGUID as GUID FROM PostCategory
             WHERE
                 Category IN(%s))
+    `
+
+	allPostQuerySortPubDateDesc := `
+        ORDER BY
+            PublicationDate DESC
+    `
+
+	allPostQuerySortPubDateAsc := `
+        ORDER BY
+            PublicationDate ASC
     `
 
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -420,6 +429,7 @@ func main() {
 		}
 
 		wherestr := ""
+		orderstr := allPostQuerySortPubDateDesc
 		var values []interface{}
 
 		if len(selectedFeedTitles) > 0 {
@@ -457,7 +467,13 @@ func main() {
 			values = append(values, convertArgs(selectedPostCategories)...)
 		}
 
-		querystr := fmt.Sprintf(allPostQueryStr, wherestr)
+		oldestFirst := string(query.Peek("oldestFirst")) == "on"
+
+		if oldestFirst {
+			orderstr = allPostQuerySortPubDateAsc
+		}
+
+		querystr := fmt.Sprintf(allPostQueryStr, wherestr, orderstr)
 
 		rows, err = db.Query(querystr, values...)
 		if err != nil {
@@ -498,6 +514,7 @@ func main() {
 			"PostCategories": postCategories,
 			"Feeds":          feeds,
 			"Posts":          posts,
+			"OldestFirst":    oldestFirst,
 		})
 	})
 
