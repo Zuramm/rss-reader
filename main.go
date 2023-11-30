@@ -316,6 +316,14 @@ func main() {
                 Category IN(%s))
     `
 
+	allPostQueryPostCategoryStr := `
+        GUID IN(
+            SELECT
+                PostGUID as GUID FROM PostCategory
+            WHERE
+                Category IN(%s))
+    `
+
 	app.Get("/", func(c *fiber.Ctx) error {
 		query := c.Context().QueryArgs()
 
@@ -324,7 +332,7 @@ func main() {
 			Selected bool
 		}
 
-		var selectedFeedTitles, selectedFeedCategories []string
+		var selectedFeedTitles, selectedFeedCategories, selectedPostCategories []string
 		var feeds, feedCategories, postCategories []TitleSelected
 
 		rows, err := allFeedsTitle.Query()
@@ -396,11 +404,15 @@ func main() {
 
 				isSet := false
 
-				for _, el := range query.PeekMulti("feedCategory") {
+				for _, el := range query.PeekMulti("postCategory") {
 					if string(el) == category {
 						isSet = true
 						break
 					}
+				}
+
+				if isSet {
+					selectedPostCategories = append(selectedPostCategories, category)
 				}
 
 				postCategories = append(postCategories, TitleSelected{category, isSet})
@@ -430,6 +442,19 @@ func main() {
 
 			wherestr += fmt.Sprintf(allPostQueryFeedCategoryStr, placeholders)
 			values = append(values, convertArgs(selectedFeedCategories)...)
+		}
+
+		if len(selectedPostCategories) > 0 {
+			if len(wherestr) == 0 {
+				wherestr += "WHERE "
+			} else {
+				wherestr += " AND "
+			}
+
+			placeholders := strings.Repeat("?,", len(selectedPostCategories)-1) + "?"
+
+			wherestr += fmt.Sprintf(allPostQueryPostCategoryStr, placeholders)
+			values = append(values, convertArgs(selectedPostCategories)...)
 		}
 
 		querystr := fmt.Sprintf(allPostQueryStr, wherestr)
