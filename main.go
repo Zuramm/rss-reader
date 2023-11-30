@@ -333,6 +333,10 @@ func main() {
             PublicationDate ASC
     `
 
+	allPostQueryIsNotReadStr := `
+        IsRead = 0
+    `
+
 	app.Get("/", func(c *fiber.Ctx) error {
 		query := c.Context().QueryArgs()
 
@@ -467,6 +471,18 @@ func main() {
 			values = append(values, convertArgs(selectedPostCategories)...)
 		}
 
+		showAll := string(query.Peek("allPosts")) == "on"
+
+		if !showAll {
+			if len(wherestr) == 0 {
+				wherestr += "WHERE "
+			} else {
+				wherestr += " AND "
+			}
+
+			wherestr += allPostQueryIsNotReadStr
+		}
+
 		oldestFirst := string(query.Peek("oldestFirst")) == "on"
 
 		if oldestFirst {
@@ -515,6 +531,7 @@ func main() {
 			"Feeds":          feeds,
 			"Posts":          posts,
 			"OldestFirst":    oldestFirst,
+			"AllPosts":       showAll,
 		})
 	})
 

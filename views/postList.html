@@ -26,6 +26,10 @@
         <input type="checkbox" name="oldestFirst" {{- if .OldestFirst }} checked{{ end }} />
         Oldest first
     </label>
+    <label>
+        <input type="checkbox" name="allPosts" {{- if .AllPosts }} checked{{ end }} />
+        Show all posts
+    </label>
     <input type="search" name="query" value="{{ .Query }}" />
     <button>Search</button>
 </form>
