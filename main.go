@@ -290,17 +290,23 @@ func main() {
 	allPostQueryStr := `
         SELECT
             GUID,
-            Title,
+            Post.Title,
             Excerpt,
             PublicationDate,
             IsRead,
-            Author,
+            Post.Author,
             FeedTitle,
             ImageUrl
         FROM
             Post
-        %s
         %s;
+    `
+
+	allPostQuerySearchStr := `
+            INNER JOIN PostIdx
+        WHERE
+	        PostIdx MATCH ?
+	        AND Post.rowid = PostIdx.rowid
     `
 
 	allPostQueryFeedTitleStr := `
@@ -323,6 +329,10 @@ func main() {
                 Category IN(%s))
     `
 
+	allPostQueryIsNotReadStr := `
+        IsRead = 0
+    `
+
 	allPostQuerySortPubDateDesc := `
         ORDER BY
             PublicationDate DESC
@@ -331,10 +341,6 @@ func main() {
 	allPostQuerySortPubDateAsc := `
         ORDER BY
             PublicationDate ASC
-    `
-
-	allPostQueryIsNotReadStr := `
-        IsRead = 0
     `
 
 	app.Get("/", func(c *fiber.Ctx) error {
@@ -436,8 +442,19 @@ func main() {
 		orderstr := allPostQuerySortPubDateDesc
 		var values []interface{}
 
+		queryTerm := string(query.Peek("query"))
+
+		if len(queryTerm) > 0 {
+			wherestr = allPostQuerySearchStr
+			values = append(values, queryTerm)
+		}
+
 		if len(selectedFeedTitles) > 0 {
-			wherestr += "WHERE "
+			if len(wherestr) == 0 {
+				wherestr += "WHERE "
+			} else {
+				wherestr += " AND "
+			}
 
 			placeholders := strings.Repeat("?,", len(selectedFeedTitles)-1) + "?"
 
@@ -489,7 +506,7 @@ func main() {
 			orderstr = allPostQuerySortPubDateAsc
 		}
 
-		querystr := fmt.Sprintf(allPostQueryStr, wherestr, orderstr)
+		querystr := fmt.Sprintf(allPostQueryStr, wherestr+orderstr)
 
 		rows, err = db.Query(querystr, values...)
 		if err != nil {
@@ -532,6 +549,7 @@ func main() {
 			"Posts":          posts,
 			"OldestFirst":    oldestFirst,
 			"AllPosts":       showAll,
+			"Query":          queryTerm,
 		})
 	})
 
