@@ -1,21 +1,23 @@
-<form method="POST" enctype="multipart/form-data">
-    {{ if .ImageUrl }}
-    <img src="{{ .ImageUrl }}" alt="{{ .ImageTitle }}" height="24" />
-    {{ end }}
-    <h1>Edit Feed</h1>
-    <label>RSS-Feed URL: <input type="url" name="link" value="{{ .Feed.Link }}"></label><br />
-    <label>Title: <input name="title" value="{{ .Feed.Title }}" /></label><br>
-    <label>Description: <textarea name="description">{{ .Feed.Description }}</textarea></label><br />
-    <fieldset>
-        <legend>Categories:</legend>
-        {{ range .Categories }}
-        <label>
-            <input type="checkbox" name="category" value="{{ .Name }}" {{- if .Active }} checked {{- end }} />
-            {{ .Name }}
-        </label>
+<main>
+    <form method="POST" enctype="multipart/form-data">
+        {{ if .ImageUrl }}
+        <img src="{{ .ImageUrl }}" alt="{{ .ImageTitle }}" height="24" />
         {{ end }}
-    </fieldset>
-    <br />
-    <button name="method" value="remove">Remove Feed</button>
-    <button>Save Changes</button>
-</form>
+        <h1>Edit Feed</h1>
+        <label>RSS-Feed URL: <input type="url" name="link" value="{{ .Feed.Link }}"></label><br />
+        <label>Title: <input name="title" value="{{ .Feed.Title }}" /></label><br>
+        <label>Description: <textarea name="description">{{ .Feed.Description }}</textarea></label><br />
+        <fieldset>
+            <legend>Categories:</legend>
+            {{ range .Categories }}
+            <label>
+                <input type="checkbox" name="category" value="{{ .Name }}" {{- if .Active }} checked {{- end }} />
+                {{ .Name }}
+            </label>
+            {{ end }}
+        </fieldset>
+        <br />
+        <button name="method" value="remove">Remove Feed</button>
+        <button>Save Changes</button>
+    </form>
+</main>
