@@ -26,6 +26,15 @@ const (
 	FEED_TYPE_WEB_SUB  = iota
 )
 
+func removeUnordered[Type any](s []Type, i int) []Type {
+	s[i] = s[len(s)-1]
+	return s[:len(s)-1]
+}
+
+func removeOrdered[Type any](slice []Type, s int) []Type {
+	return append(slice[:s], slice[s+1:]...)
+}
+
 type Feed struct {
 	Title       string
 	Description string
@@ -275,10 +284,14 @@ func main() {
 	defer allFeedCategoriesQuery.Close()
 
 	allPostCategoriesQuery, err := db.Prepare(`
-        SELECT DISTINCT
+        SELECT
             Category
         FROM
             PostCategory
+        GROUP BY
+	        Category
+        HAVING
+	        COUNT(PostGUID) > 2
         ORDER BY
             Category ASC;
     `)
@@ -873,7 +886,14 @@ func main() {
 			return c.Render("error", fiber.Map{"Error": "Failed Feed Operation", "Reason": "Invalid multipart form"})
 		}
 
-		if len(form.Value["method"]) > 0 && form.Value["method"][0] == "remove" {
+		var method string
+
+		if len(form.Value["method"]) > 0 {
+			method = form.Value["method"][0]
+		}
+
+		switch method {
+		case "delete":
 			_, err = removeFeedQuery.Exec(title)
 			if err != nil {
 				log.Printf("POST /feed/:title: remove feed %v: %v", title, err)
@@ -881,7 +901,7 @@ func main() {
 			}
 
 			return c.Render("feedRemove", fiber.Map{"RemovedFeedTitle": title})
-		} else {
+		default:
 			if len(form.Value["title"]) == 0 || len(form.Value["description"]) == 0 || len(form.Value["link"]) == 0 {
 				return c.Render("error", fiber.Map{"Error": "Failed Updateting Feed", "Reason": "Incomplete form data"})
 			}
@@ -894,6 +914,8 @@ func main() {
 
 			// the query rows have to be closed before making further operations on the same table
 			var addCat, removeCat []string
+
+			addCat = form.Value["category"]
 
 			{
 				rows, err := feedCategoriesByTitleQuery.Query(title)
@@ -912,27 +934,29 @@ func main() {
 						continue
 					}
 
-					isAssignedInForm := false
+					categoryIndex := -1
 
-					for _, cat := range form.Value["category"] {
+					for i, cat := range form.Value["category"] {
 						if cat == category {
-							isAssignedInForm = true
+							categoryIndex = i
 							break
 						}
 					}
 
-					log.Printf("category: %v, table: %v, form: %v", category, isAssignedInTable, isAssignedInForm)
+					isAssignedInForm := categoryIndex >= 0
 
 					if isAssignedInTable && !isAssignedInForm {
 						removeCat = append(removeCat, category)
-					} else if !isAssignedInTable && isAssignedInForm {
-						addCat = append(addCat, category)
+					} else if isAssignedInTable {
+						addCat = removeUnordered(addCat, categoryIndex)
 					}
 				}
 			}
 
 			for _, category := range addCat {
-				log.Printf("add category %s", category)
+				if category == "" {
+					continue
+				}
 				_, err := addFeedCategoryQuery.Exec(title, category)
 				if err != nil {
 					log.Printf("POST /feed/:title: add category %v: %v", category, err)
@@ -940,7 +964,6 @@ func main() {
 			}
 
 			for _, category := range removeCat {
-				log.Printf("remove category %s", category)
 				_, err := removeFeedCategoryQuery.Exec(title, category)
 				if err != nil {
 					log.Printf("POST /feed/:title: remove category %v: %v", category, err)

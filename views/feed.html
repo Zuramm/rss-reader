@@ -9,6 +9,13 @@
         <label>Description: <textarea name="description">{{ .Feed.Description }}</textarea></label><br />
         <fieldset>
             <legend>Categories:</legend>
+            <form method="POST" enctype="multipart/form-data">
+                <label>
+                    Name:
+                    <input name="category" />
+                </label>
+                <button name="method" value="addCategory" />
+            </form>
             {{ range .Categories }}
             <label>
                 <input type="checkbox" name="category" value="{{ .Name }}" {{- if .Active }} checked {{- end }} />
