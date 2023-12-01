@@ -302,6 +302,14 @@ func main() {
         %s;
     `
 
+	allPostQueryCountStr := `
+        SELECT
+            Count(*)
+        FROM
+            Post
+        %s;
+    `
+
 	allPostQuerySearchStr := `
             INNER JOIN PostIdx
         WHERE
@@ -333,15 +341,21 @@ func main() {
         IsRead = 0
     `
 
-	allPostQuerySortPubDateDesc := `
+	allPostQuerySortPubDateDescStr := `
         ORDER BY
             PublicationDate DESC
     `
 
-	allPostQuerySortPubDateAsc := `
+	allPostQuerySortPubDateAscStr := `
         ORDER BY
             PublicationDate ASC
     `
+
+	allPostQueryPaginationStr := `
+        LIMIT ? OFFSET ?
+    `
+
+	pageSize := 20
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		query := c.Context().QueryArgs()
@@ -439,7 +453,7 @@ func main() {
 		}
 
 		wherestr := ""
-		orderstr := allPostQuerySortPubDateDesc
+		orderstr := allPostQuerySortPubDateDescStr
 		var values []interface{}
 
 		queryTerm := string(query.Peek("query"))
@@ -503,10 +517,29 @@ func main() {
 		oldestFirst := string(query.Peek("oldestFirst")) == "on"
 
 		if oldestFirst {
-			orderstr = allPostQuerySortPubDateAsc
+			orderstr = allPostQuerySortPubDateAscStr
 		}
 
-		querystr := fmt.Sprintf(allPostQueryStr, wherestr+orderstr)
+		page := query.GetUintOrZero("page")
+
+		countstr := fmt.Sprintf(allPostQueryCountStr, wherestr)
+
+		row := db.QueryRow(countstr, values...)
+
+		count := 0
+		maxPage := 100_000_000
+		err = row.Scan(&count)
+		if err != nil {
+			log.Printf("GET /: count results: %v", err)
+		}
+
+		if count > 0 {
+			maxPage = count / pageSize
+			page = min(page, maxPage)
+		}
+
+		querystr := fmt.Sprintf(allPostQueryStr, wherestr+orderstr+allPostQueryPaginationStr)
+		values = append(values, pageSize, page*pageSize)
 
 		rows, err = db.Query(querystr, values...)
 		if err != nil {
@@ -550,6 +583,10 @@ func main() {
 			"OldestFirst":    oldestFirst,
 			"AllPosts":       showAll,
 			"Query":          queryTerm,
+			"Page":           page,
+			"PagePrev":       max(0, page-1),
+			"PageNext":       min(page+1, maxPage),
+			"Results":        count,
 		})
 	})
 
