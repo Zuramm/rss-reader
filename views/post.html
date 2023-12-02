@@ -6,6 +6,11 @@
         <h1><a href="{{ .Post.Link }}">{{ .Post.Title }}</a></h1>
         <p>By {{ .Post.Author }} in {{ .Post.FeedTitle }} at <time>{{ .Post.PublicationDate }}</time>
         </p>
+        <ul>
+            {{ range .Categories }}
+            <li><a href="/?category={{ . }}">{{ . }}</a></li>
+            {{ end }}
+        </ul>
     </header>
     <article>
         {{ .Content }}

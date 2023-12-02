@@ -46,7 +46,7 @@ type Feed struct {
 }
 
 type Post struct {
-	GUID            string
+	Rowid           string
 	Title           string
 	Excerpt         string
 	Link            string
@@ -81,11 +81,11 @@ func initFetchQuery(db *sql.DB) {
 
 	postsQuery, err := db.Prepare(`
         SELECT
-            GUID
+            rowid
         FROM
             Post
         WHERE
-            GUID = ?;
+            rowid = ?;
     `)
 	if err != nil {
 		log.Fatalf("initFetchQuery: prepare post query: %v", err)
@@ -94,7 +94,7 @@ func initFetchQuery(db *sql.DB) {
 
 	newPostQuery, err := db.Prepare(`
         INSERT INTO Post(GUID, Title, "Link", Excerpt, Content, PublicationDate, Author, ImageUrl, FeedTitle)
-            VALUES      (?,    ?,     ?,    ?,       ?,       ?,               ?,      ?,        ?     )
+            VALUES      (?,    ?,     ?,      ?,       ?,       ?,               ?,      ?,        ?        )
     `)
 	if err != nil {
 		log.Fatalf("initFetchQuery: prepare new post query: %v", err)
@@ -102,8 +102,8 @@ func initFetchQuery(db *sql.DB) {
 	fetchQuery.newPost = newPostQuery
 
 	newPostCategoryQuery, err := db.Prepare(`
-        INSERT INTO PostCategory(PostGUID, Category)
-            VALUES              (?       , ?       )
+        INSERT INTO PostCategory(Post_FK, Category)
+            VALUES              (?,       ?       )
     `)
 	if err != nil {
 		log.Fatalf("initFetchQuery: prepare new post category: %v", err)
@@ -119,7 +119,10 @@ func closeFetchQuery() {
 }
 
 func fetchFeeds(feedParser *gofeed.Parser, policy *bluemonday.Policy, db *sql.DB) {
+	time.Sleep(5 * time.Minute)
+
 	for {
+		log.Printf("fetchFeeds: start")
 		var links []string
 
 		{
@@ -146,19 +149,27 @@ func fetchFeeds(feedParser *gofeed.Parser, policy *bluemonday.Policy, db *sql.DB
 			fetchFeedPosts(feedParser, policy, link)
 		}
 
+		log.Printf("fetchFeeds: end")
+
 		time.Sleep(REFRESH_RATE)
 	}
 }
 
 func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link string) {
-	feed, err := feedParser.ParseURL(link)
+	var feed *gofeed.Feed
+	var article readability.Article
+	var res sql.Result
+	var rowid int64
+	var err error
+
+	feed, err = feedParser.ParseURL(link)
 	if err != nil {
 		log.Printf("fetchFeedPosts: parse feed %v: %v", link, err)
 		return
 	}
 
 	for _, item := range feed.Items {
-		article, err := readability.FromURL(item.Link, 30*time.Second)
+		article, err = readability.FromURL(item.Link, 30*time.Second)
 		if err != nil {
 			log.Printf("fetchFeedPosts: parse post %s: %v", item.Link, err)
 			continue
@@ -185,7 +196,7 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 			content = article.Content
 		}
 
-		// content = policy.Sanitize(content)
+		content = policy.Sanitize(content)
 
 		pubDate := time.Now().Unix()
 
@@ -198,7 +209,7 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 			author = item.Author.Name
 		}
 
-		_, err = fetchQuery.newPost.Exec(item.GUID, title, item.Link, article.Excerpt, content, pubDate, author, image, feed.Title)
+		res, err = fetchQuery.newPost.Exec(item.GUID, title, item.Link, article.Excerpt, content, pubDate, author, image, feed.Title)
 		if err != nil {
 			if sqliteErr, ok := err.(sqlite3.Error); ok {
 				if sqliteErr.Code == sqlite3.ErrConstraint {
@@ -209,10 +220,12 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 			continue
 		}
 
+		rowid, err = res.LastInsertId()
+
 		for _, category := range item.Categories {
-			_, err = fetchQuery.newPostCategory.Exec(item.GUID, category)
+			_, err = fetchQuery.newPostCategory.Exec(rowid, category)
 			if err != nil {
-				log.Printf("fetchFeedPosts: add post category %s to %s: %v", category, item.GUID, err)
+				log.Printf("fetchFeedPosts: add post category %s to %s: %v", category, item.Link, err)
 				continue
 			}
 		}
@@ -291,7 +304,7 @@ func main() {
         GROUP BY
 	        Category
         HAVING
-	        COUNT(PostGUID) > 2
+	        COUNT(Post_FK) > 2
         ORDER BY
             Category ASC;
     `)
@@ -302,7 +315,7 @@ func main() {
 
 	allPostQueryStr := `
         SELECT
-            GUID,
+            rowid,
             Post.Title,
             Excerpt,
             PublicationDate,
@@ -343,9 +356,9 @@ func main() {
     `
 
 	allPostQueryPostCategoryStr := `
-        GUID IN(
+        rowid IN(
             SELECT
-                PostGUID as GUID FROM PostCategory
+                Post_FK FROM PostCategory
             WHERE
                 Category IN(%s))
     `
@@ -566,7 +579,7 @@ func main() {
 		for rows.Next() {
 			var post Post
 			var author, excerpt, imageUrl *string
-			err := rows.Scan(&post.GUID, &post.Title, &excerpt, &post.PublicationDate, &post.IsRead, &author, &post.FeedTitle, &imageUrl)
+			err := rows.Scan(&post.Rowid, &post.Title, &excerpt, &post.PublicationDate, &post.IsRead, &author, &post.FeedTitle, &imageUrl)
 			if err != nil {
 				log.Printf("GET /: get post data: %v", err)
 				continue
@@ -615,7 +628,7 @@ func main() {
         FROM
             Post
         WHERE
-            GUID = ?;
+            rowid = ?;
     `)
 	if err != nil {
 		log.Fatalf("main: prepare post query: %v", err)
@@ -628,36 +641,77 @@ func main() {
         SET
             IsRead = 1
         WHERE
-            GUID = ?;
+            rowid = ?;
     `)
 	if err != nil {
 		log.Fatalf("main: prepare read post query: %v", err)
 	}
 	defer readPostQuery.Close()
 
-	app.Get("/post/:guid", func(c *fiber.Ctx) error {
-		guid, err := url.PathUnescape(c.Params("guid"))
+	postCategoryQuery, err := db.Prepare(`
+        SELECT
+            Category
+        FROM
+            PostCategory
+        WHERE
+            Post_FK = ?;
+    `)
+	if err != nil {
+		log.Fatalf("main: prepare post category query: %v", err)
+	}
+	defer postCategoryQuery.Close()
+
+	app.Get("/post/:id", func(c *fiber.Ctx) error {
+		var rows *sql.Rows
+		var row *sql.Row
+		var id int
+		var err error
+
+		id, err = c.ParamsInt("id")
 		if err != nil {
-			log.Printf("GET /post/:guid: get title: %v", err)
+			log.Printf("GET /post/:id: get title: %v", err)
 			return c.Render("error", fiber.Map{"Error": "Failed Getting Feed", "Reason": "Invalid title"})
 		}
 
-		_, err = readPostQuery.Exec(guid)
+		_, err = readPostQuery.Exec(id)
 		if err != nil {
-			log.Printf("GET /post/:guid: set post as read: %v", err)
+			log.Printf("GET /post/:id: set post as read: %v", err)
 		}
 
-		rows := postQuery.QueryRow(guid)
+		row = postQuery.QueryRow(id)
 
 		var post Post
 
-		err = rows.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedTitle, &post.ImageUrl)
+		err = row.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedTitle, &post.ImageUrl)
 		if err != nil {
-			log.Printf("GET /post/:guid: get post data: %v", err)
+			log.Printf("GET /post/:id: get post data: %v", err)
 			return c.Render("error", fiber.Map{"Error": "Failed Getting Post"})
 		}
 
-		return c.Render("post", fiber.Map{"Post": post, "Content": template.HTML(post.Content)})
+		var categories []string
+
+		rows, err = postCategoryQuery.Query(id)
+		if err != nil {
+			log.Printf("GET /post/:id: get all categories: %v", err)
+			return c.Render("error", fiber.Map{"Error": "Failed Getting Post", "Reason": "Failed Getting Post Categories"})
+		}
+
+		for rows.Next() {
+			var category string
+			err = rows.Scan(&category)
+			if err != nil {
+				log.Printf("GET /post/:id: get category data: %v", err)
+				continue
+			}
+
+			categories = append(categories, category)
+		}
+
+		return c.Render("post", fiber.Map{
+			"Post":       post,
+			"Categories": categories,
+			"Content":    template.HTML(post.Content)},
+		)
 	})
 
 	allFeedsQuery, err := db.Prepare(`

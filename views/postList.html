@@ -46,7 +46,7 @@
             {{ if .ImageUrl }}
             <img src="{{ .ImageUrl }}" alt="" loading="lazy" width="400" height="300" style="object-fit: cover;" />
             {{ end }}
-            <a href="post/{{ pathEscape .GUID }}">
+            <a href="post/{{ .Rowid }}">
                 <h2>{{ if not .IsRead }}<span>new*</span> {{ end }}{{ .Title }}</h2>
             </a>
             <p>By {{ .Author }} in {{ .FeedTitle }} at <time>{{ .PublicationDate }}</time>
