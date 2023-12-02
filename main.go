@@ -707,9 +707,13 @@ func main() {
 			categories = append(categories, category)
 		}
 
+		publicationDate := time.Unix(post.PublicationDate, 0)
+
 		return c.Render("post", fiber.Map{
 			"Post":       post,
 			"Categories": categories,
+			"Date":       publicationDate.Format("2006-01-02T15:04:05Z"),
+			"HumanDate":  publicationDate.Format("Mon Jan 2 15:04:05 MST 2006"),
 			"Content":    template.HTML(post.Content)},
 		)
 	})

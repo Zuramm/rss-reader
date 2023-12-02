@@ -8,7 +8,7 @@
             <a href="{{ .Post.Link }}">Original article</a>
             by {{ .Post.Author }}
             in {{ .Post.FeedTitle }}
-            at <time>{{ .Post.PublicationDate }}</time>
+            at <time datetime="{{ .Date }}">{{ .HumanDate }}</time>
         </p>
         <ul>
             {{ range .Categories }}
