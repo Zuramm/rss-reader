@@ -1,10 +1,14 @@
 <main>
     <header>
         {{ if .Post.ImageUrl }}
-        <img src="{{ .Post.ImageUrl }}" alt="" width="400" height="300" style="object-fit: cover;" />
+        <img src="{{ .Post.ImageUrl }}" alt="" height="300" />
         {{ end }}
-        <h1><a href="{{ .Post.Link }}">{{ .Post.Title }}</a></h1>
-        <p>By {{ .Post.Author }} in {{ .Post.FeedTitle }} at <time>{{ .Post.PublicationDate }}</time>
+        <h1>{{ .Post.Title }}</h1>
+        <p>
+            <a href="{{ .Post.Link }}">Original article</a>
+            by {{ .Post.Author }}
+            in {{ .Post.FeedTitle }}
+            at <time>{{ .Post.PublicationDate }}</time>
         </p>
         <ul>
             {{ range .Categories }}
