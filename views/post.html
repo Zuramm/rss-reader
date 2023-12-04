@@ -15,6 +15,9 @@
             <li><a href="/?category={{ . }}">{{ . }}</a></li>
             {{ end }}
         </ul>
+        <form method="post">
+            <button>Reimport Post</button>
+        </form>
     </header>
     <article>
         {{ .Content }}

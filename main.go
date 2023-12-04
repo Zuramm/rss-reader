@@ -169,7 +169,7 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 	}
 
 	for _, item := range feed.Items {
-		article, err = readability.FromURL(item.Link, 30*time.Second)
+		article, err = ParseArticle(item.Link, 30*time.Second)
 		if err != nil {
 			log.Printf("fetchFeedPosts: parse post %s: %v", item.Link, err)
 			continue
@@ -196,7 +196,7 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 			content = article.Content
 		}
 
-		content = policy.Sanitize(content)
+		// content = policy.Sanitize(content)
 
 		pubDate := time.Now().Unix()
 
@@ -716,6 +716,102 @@ func main() {
 			"HumanDate":  publicationDate.Format("Mon Jan 2 15:04:05 MST 2006"),
 			"Content":    template.HTML(post.Content)},
 		)
+	})
+
+	postAllDataQuery, err := db.Prepare(`
+        SELECT
+            GUID,
+            Title,
+            Link,
+            Content,
+            PublicationDate,
+            IsRead,
+            Author,
+            FeedTitle,
+            ImageUrl,
+            Excerpt
+        FROM
+            Post
+        WHERE
+            rowid = ?;
+    `)
+	if err != nil {
+		log.Fatalf("main: prepare post all data query: %v", err)
+	}
+	defer postAllDataQuery.Close()
+
+	updatePostAllDataQuery, err := db.Prepare(`
+        UPDATE
+            Post
+        SET
+            GUID = ?,
+            Title = ?,
+            Link = ?,
+            Content = ?,
+            PublicationDate = ?,
+            IsRead = ?,
+            Author = ?,
+            FeedTitle = ?,
+            ImageUrl = ?,
+            Excerpt = ?
+        WHERE
+            rowid = ?;
+    `)
+	if err != nil {
+		log.Fatalf("main: prepare update post all data query: %v", err)
+	}
+	defer updatePostAllDataQuery.Close()
+
+	app.Post("/post/:id", func(c *fiber.Ctx) error {
+		var row *sql.Row
+		var id, PublicationDate, IsRead int
+		var GUID, Title, Link, Content, Author, FeedTitle, ImageUrl, Excerpt string
+		var article readability.Article
+		var err error
+
+		id, err = c.ParamsInt("id")
+		if err != nil {
+			log.Printf("POST /post/%v: get post id: %v", id, err)
+			return c.Render("error", fiber.Map{"Error": "Failed Reimporting Post", "Reason": "Invalid ID"})
+		}
+
+		row = postAllDataQuery.QueryRow(id)
+
+		err = row.Scan(&GUID, &Title, &Link, &Content, &PublicationDate, &IsRead, &Author, &FeedTitle, &ImageUrl, &Excerpt)
+		if err != nil {
+			log.Printf("POST /post/%v: getting all post data: %v", id, err)
+			return c.Render("error", fiber.Map{"Error": "Failed Reimporting Post", "Reason": "Couldn't load data"})
+		}
+
+		article, err = ParseArticle(Link, 30*time.Second)
+		if err != nil {
+			log.Printf("POST /post/%v: parsing article: %v", id, err)
+			return c.Render("error", fiber.Map{"Error": "Failed Reimporting Post", "Reason": "Couldn't parse article"})
+		}
+
+		if article.Title != "" {
+			Title = article.Title
+		}
+
+		if article.Content != "" {
+			Content = article.Content
+		}
+
+		if article.Image != "" {
+			ImageUrl = article.Image
+		}
+
+		if article.Excerpt != "" {
+			Excerpt = article.Excerpt
+		}
+
+		_, err = updatePostAllDataQuery.Exec(GUID, Title, Link, Content, PublicationDate, IsRead, Author, FeedTitle, ImageUrl, Excerpt, id)
+		if err != nil {
+			log.Printf("POST /post/%v: updating post: %v", id, err)
+			return c.Render("error", fiber.Map{"Error": "Failed Reimporting Post", "Reason": "Couldn't parse article"})
+		}
+
+		return c.Redirect(fmt.Sprintf("/post/%v", id))
 	})
 
 	allFeedsQuery, err := db.Prepare(`
