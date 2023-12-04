@@ -85,7 +85,7 @@ func initFetchQuery(db *sql.DB) {
         FROM
             Post
         WHERE
-            rowid = ?;
+            GUID = ?;
     `)
 	if err != nil {
 		log.Fatalf("initFetchQuery: prepare post query: %v", err)
@@ -159,6 +159,7 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 	var feed *gofeed.Feed
 	var article readability.Article
 	var res sql.Result
+	var row *sql.Row
 	var rowid int64
 	var err error
 
@@ -169,6 +170,18 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 	}
 
 	for _, item := range feed.Items {
+		row = fetchQuery.posts.QueryRow(item.GUID)
+
+		err = row.Scan(rowid)
+		if err == nil {
+			continue
+		} else if err != nil && err != sql.ErrNoRows {
+			log.Printf("fetchFeedPosts: check if post exists: %v", err)
+			continue
+		}
+
+		log.Printf("parsing post %v", item.Title)
+
 		article, err = ParseArticle(item.Link, 30*time.Second)
 		if err != nil {
 			log.Printf("fetchFeedPosts: parse post %s: %v", item.Link, err)
