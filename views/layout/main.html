@@ -10,7 +10,7 @@
     {{ range .Styles }}
     <link rel="stylesheet" type="text/css" href="{{ . }}" />
     {{ end }}
-    <title>Main</title>
+    <title>RSS-Reader{{ if .Title }} - {{ .Title }}{{ end }}</title>
 </head>
 
 <body>

@@ -585,7 +585,10 @@ func main() {
 		rows, err = db.Query(querystr, values...)
 		if err != nil {
 			log.Printf("GET /: get all posts: %v", err)
-			return c.Render("status", fiber.Map{"Name": "Failed Getting Posts"})
+			return c.Render("status", fiber.Map{
+				"Title": "Error",
+				"Name":  "Failed Getting Posts",
+			})
 		}
 		defer rows.Close()
 
@@ -618,6 +621,7 @@ func main() {
 		// Render with and extends
 		return c.Render("postList", fiber.Map{
 			"Styles":         []string{"/post-list.css"},
+			"Title":          "All Posts",
 			"FeedCategories": feedCategories,
 			"PostCategories": postCategories,
 			"Feeds":          feeds,
@@ -687,6 +691,7 @@ func main() {
 		if err != nil {
 			log.Printf("GET /post/:id: get title: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Getting Feed",
 				"Description": "Invalid title",
 			})
@@ -704,7 +709,10 @@ func main() {
 		err = row.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedTitle, &post.ImageUrl)
 		if err != nil {
 			log.Printf("GET /post/:id: get post data: %v", err)
-			return c.Render("status", fiber.Map{"Name": "Failed Getting Post"})
+			return c.Render("status", fiber.Map{
+				"Title": "Error",
+				"Name":  "Failed Getting Post",
+			})
 		}
 
 		var categories []string
@@ -713,6 +721,7 @@ func main() {
 		if err != nil {
 			log.Printf("GET /post/:id: get all categories: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Getting Post",
 				"Description": "Failed Getting Post Categories",
 			})
@@ -733,6 +742,7 @@ func main() {
 
 		return c.Render("post", fiber.Map{
 			"Styles":     []string{"/post.css"},
+			"Title":      post.Title,
 			"Post":       post,
 			"Categories": categories,
 			"Date":       publicationDate.Format("2006-01-02T15:04:05Z"),
@@ -796,6 +806,7 @@ func main() {
 		if err != nil {
 			log.Printf("POST /post/%v: get post id: %v", id, err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Reimporting Post",
 				"Description": "Invalid ID",
 			})
@@ -807,6 +818,7 @@ func main() {
 		if err != nil {
 			log.Printf("POST /post/%v: getting all post data: %v", id, err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Reimporting Post",
 				"Description": "Couldn't load data",
 			})
@@ -816,6 +828,7 @@ func main() {
 		if err != nil {
 			log.Printf("POST /post/%v: parsing article: %v", id, err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Reimporting Post",
 				"Description": "Couldn't parse article",
 			})
@@ -841,6 +854,7 @@ func main() {
 		if err != nil {
 			log.Printf("POST /post/%v: updating post: %v", id, err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Reimporting Post",
 				"Description": "Couldn't parse article",
 			})
@@ -871,7 +885,10 @@ func main() {
 		rows, err := allFeedsQuery.Query()
 		if err != nil {
 			log.Printf("GET /feed: get all feeds: %v", err)
-			return c.Render("status", fiber.Map{"Name": "Failed Loading Feeds"})
+			return c.Render("status", fiber.Map{
+				"Title": "Error",
+				"Name":  "Failed Loading Feeds",
+			})
 		}
 		defer rows.Close()
 
@@ -887,7 +904,11 @@ func main() {
 			feeds = append(feeds, feed)
 		}
 
-		return c.Render("feedList", fiber.Map{"Styles": []string{"/feed-list.css"}, "Feeds": feeds})
+		return c.Render("feedList", fiber.Map{
+			"Styles": []string{"/feed-list.css"},
+			"Title":  "All Feeds",
+			"Feeds":  feeds,
+		})
 	})
 
 	newFeedQuery, err := db.Prepare(`
@@ -903,6 +924,7 @@ func main() {
 		rssUrl := c.FormValue("url")
 		if rssUrl == "" {
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed to Create Feed",
 				"Description": "Missing RSS-URL",
 			})
@@ -912,6 +934,7 @@ func main() {
 		if err != nil {
 			log.Printf("POST /feed: parse feed: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":  "Error",
 				"Name":   "Failed to Create Feed",
 				"Reason": fmt.Sprintf("Failed parsing RSS-Feed \"%s\"", rssUrl),
 			})
@@ -926,6 +949,7 @@ func main() {
 		if err != nil {
 			log.Printf("POST /feed: add feed: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed to Create Feed",
 				"Description": "Failed database query",
 			})
@@ -934,6 +958,7 @@ func main() {
 		go fetchFeedPosts(feedParser, policy, feedLink)
 
 		return c.Render("status", fiber.Map{
+			"Title":       "Added Feed",
 			"Name":        "Added Feed Successfully",
 			"Description": fmt.Sprintf("Added feed with title %v", feed.Title),
 		})
@@ -987,6 +1012,7 @@ func main() {
 		if err != nil {
 			log.Printf("GET /feed/:title: get title: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Getting Feed",
 				"Description": "Invalid title",
 			})
@@ -1000,6 +1026,7 @@ func main() {
 		if err != nil {
 			log.Printf("GET /feed/:title: scan feed row: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Getting Feed",
 				"Description": fmt.Sprintf("Couldn't load data for \"%s\"", title),
 			})
@@ -1009,6 +1036,7 @@ func main() {
 		if err != nil {
 			log.Printf("GET /feed/:title: get feed categories: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Getting Feed",
 				"Description": "Couldn't load Categories",
 			})
@@ -1033,7 +1061,12 @@ func main() {
 			categories = append(categories, value)
 		}
 
-		return c.Render("feed", fiber.Map{"Styles": []string{"/feed.css"}, "Feed": feed, "Categories": categories})
+		return c.Render("feed", fiber.Map{
+			"Styles":     []string{"/feed.css"},
+			"Title":      feed.Title,
+			"Feed":       feed,
+			"Categories": categories,
+		})
 	})
 
 	removeFeedQuery, err := db.Prepare(`
@@ -1088,6 +1121,7 @@ func main() {
 		if err != nil {
 			log.Printf("POST /feed/:title: get title from param: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Feed Operation",
 				"Description": "Invalid feed title",
 			})
@@ -1097,6 +1131,7 @@ func main() {
 		if err != nil {
 			log.Printf("POST /feed/:title: get multipart form: %v", err)
 			return c.Render("status", fiber.Map{
+				"Title":       "Error",
 				"Name":        "Failed Feed Operation",
 				"Description": "Invalid multipart form",
 			})
@@ -1114,18 +1149,21 @@ func main() {
 			if err != nil {
 				log.Printf("POST /feed/:title: remove feed %v: %v", title, err)
 				return c.Render("status", fiber.Map{
+					"Title":       "Error",
 					"Name":        "Failed to Remove Feed",
 					"Description": "Server error",
 				})
 			}
 
 			return c.Render("status", fiber.Map{
+				"Title":       "Deleted Feed",
 				"Name":        "Deleted Feed Successfully",
 				"Description": fmt.Sprintf("Deleted feed with title %v", title),
 			})
 		default:
 			if len(form.Value["title"]) == 0 || len(form.Value["description"]) == 0 || len(form.Value["link"]) == 0 {
 				return c.Render("status", fiber.Map{
+					"Title":       "Error",
 					"Name":        "Failed Updating Feed",
 					"Description": "Incomplete form data",
 				})
@@ -1135,6 +1173,7 @@ func main() {
 			if err != nil {
 				log.Printf("POST /feed/:title: update feed: %v", err)
 				return c.Render("status", fiber.Map{
+					"Title":       "Error",
 					"Name":        "Failed Updateting Feed",
 					"Description": "Server error",
 				})
@@ -1150,6 +1189,7 @@ func main() {
 				if err != nil {
 					log.Printf("POST /feed/:title: get categories: %v", err)
 					return c.Render("status", fiber.Map{
+						"Title":       "Error",
 						"Name":        "Failed Updateting Feed",
 						"Description": "Server error",
 					})
@@ -1202,6 +1242,7 @@ func main() {
 			}
 
 			return c.Render("status", fiber.Map{
+				"Title":       "Updated Feed",
 				"Name":        "Updated Feed Successfully",
 				"Description": fmt.Sprintf("Updated feed with title %v", title),
 			})
