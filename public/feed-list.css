@@ -1,0 +1,14 @@
+.feed-list {
+    max-width: var(--width-sm);
+    margin-left: auto;
+    margin-right: auto;
+    padding: var(--size-4);
+    font-family: var(--font-sans);
+}
+
+.feed-list article h2 {
+    display: inline-block;
+    margin-top: var(--size-4);
+    margin-bottom: 0;
+}
+

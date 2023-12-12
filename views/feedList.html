@@ -1,4 +1,4 @@
-<main>
+<main class="feed-list">
     <h1>All Feeds</h1>
 
     <form method="POST">
@@ -14,9 +14,10 @@
         {{ if .ImageUrl }}
         <img src="{{ .ImageUrl }}" alt="{{ .ImageTitle }}" height="24" />
         {{ end }}
+        <header>
         <h2>{{ .Title }}</h2>
-        <a href="{{ .Link }}">RSS Feed</a>
         <a href="feed/{{ pathEscape .Title }}">Edit Feed</a>
+        </header>
         <p>{{ .Description }}</p>
     </article>
     {{ end }}

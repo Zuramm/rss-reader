@@ -1,0 +1,110 @@
+.post-list {
+    font-family: var(--font-sans);
+    max-width: var(--width-xl);
+    margin-left: auto;
+    margin-right: auto;
+    padding: var(--size-4);
+}
+
+.post-list #searchform {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+    align-items: end;
+}
+
+.post-list #searchform select {
+    width: 100%;
+}
+
+.post-list #searchform .search-section > * {
+    margin-bottom: var(--size-2);
+}
+
+.post-list #searchform .search-section > *:last-child {
+    margin-bottom: 0;
+}
+
+.post-list #searchform .search-section > .search {
+    display: flex;
+    flex-direction: row;
+    gap: var(--size-2);
+}
+
+.post-list #searchform .search-section > .search > input {
+    flex-grow: 1;
+}
+
+.post-list #searchform .search-section > .search > button {
+    flex-shrink: 0;
+}
+
+.post-list .all-posts {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--size-4);
+    padding-top: var(--size-4);
+    padding-bottom: var(--size-4);
+}
+
+.post-list .all-posts > article {
+    font-family: var(--font-serif);
+}
+
+.post-list .all-posts > article header h2 {
+    margin-bottom: 0;
+    margin-top: var(--size-2);
+}
+
+.post-list .all-posts > article header p {
+    margin-top: var(--size-1);
+    font-family: var(--font-sans);
+}
+
+.post-list .all-posts > article > img,
+.post-list .all-posts > article > .placeholder {
+    width: 100%;
+    aspect-ratio: var(--ratio-landscape);
+    object-fit: cover;
+    height: unset;
+    background-color: var(--color-grey-200);
+    border-radius: var(--radius-sm);
+}
+
+@media (min-width: 40rem) {
+    .post-list #searchform {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (min-width: 80rem) {
+    .post-list #searchform {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
+}
+
+@media (min-width: 40rem) {
+    .post-list .all-posts {
+        grid-template-columns: 1fr 1fr;
+    }
+}
+
+@media (min-width: 60rem) {
+    .post-list .all-posts {
+        grid-template-columns: 1fr 1fr 1fr;
+    }
+}
+
+@media (min-width: 80rem) {
+    .post-list .all-posts {
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+    }
+}
+
+@media (prefers-color-scheme: dark) {
+    .post-list .all-posts > article > img,
+    .post-list .all-posts > article > .placeholder {
+        background-color: var(--color-grey-700);
+    }
+}

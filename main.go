@@ -172,7 +172,7 @@ func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link s
 	for _, item := range feed.Items {
 		row = fetchQuery.posts.QueryRow(item.GUID)
 
-		err = row.Scan(rowid)
+		err = row.Scan(&rowid)
 		if err == nil {
 			continue
 		} else if err != nil && err != sql.ErrNoRows {
@@ -282,6 +282,8 @@ func main() {
 		Views:       engine,
 		ViewsLayout: "layout/main",
 	})
+
+	app.Static("/", "./public")
 
 	allFeedsTitle, err := db.Prepare(`
         SELECT
@@ -394,7 +396,7 @@ func main() {
         LIMIT ? OFFSET ?
     `
 
-	pageSize := 20
+	pageSize := 24
 
 	app.Get("/", func(c *fiber.Ctx) error {
 		query := c.Context().QueryArgs()
@@ -583,7 +585,7 @@ func main() {
 		rows, err = db.Query(querystr, values...)
 		if err != nil {
 			log.Printf("GET /: get all posts: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Getting Posts"})
+			return c.Render("status", fiber.Map{"Name": "Failed Getting Posts"})
 		}
 		defer rows.Close()
 
@@ -615,6 +617,7 @@ func main() {
 
 		// Render with and extends
 		return c.Render("postList", fiber.Map{
+			"Styles":         []string{"/post-list.css"},
 			"FeedCategories": feedCategories,
 			"PostCategories": postCategories,
 			"Feeds":          feeds,
@@ -683,7 +686,10 @@ func main() {
 		id, err = c.ParamsInt("id")
 		if err != nil {
 			log.Printf("GET /post/:id: get title: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Getting Feed", "Reason": "Invalid title"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Getting Feed",
+				"Description": "Invalid title",
+			})
 		}
 
 		_, err = readPostQuery.Exec(id)
@@ -698,7 +704,7 @@ func main() {
 		err = row.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedTitle, &post.ImageUrl)
 		if err != nil {
 			log.Printf("GET /post/:id: get post data: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Getting Post"})
+			return c.Render("status", fiber.Map{"Name": "Failed Getting Post"})
 		}
 
 		var categories []string
@@ -706,7 +712,10 @@ func main() {
 		rows, err = postCategoryQuery.Query(id)
 		if err != nil {
 			log.Printf("GET /post/:id: get all categories: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Getting Post", "Reason": "Failed Getting Post Categories"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Getting Post",
+				"Description": "Failed Getting Post Categories",
+			})
 		}
 
 		for rows.Next() {
@@ -723,6 +732,7 @@ func main() {
 		publicationDate := time.Unix(post.PublicationDate, 0)
 
 		return c.Render("post", fiber.Map{
+			"Styles":     []string{"/post.css"},
 			"Post":       post,
 			"Categories": categories,
 			"Date":       publicationDate.Format("2006-01-02T15:04:05Z"),
@@ -785,7 +795,10 @@ func main() {
 		id, err = c.ParamsInt("id")
 		if err != nil {
 			log.Printf("POST /post/%v: get post id: %v", id, err)
-			return c.Render("error", fiber.Map{"Error": "Failed Reimporting Post", "Reason": "Invalid ID"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Reimporting Post",
+				"Description": "Invalid ID",
+			})
 		}
 
 		row = postAllDataQuery.QueryRow(id)
@@ -793,13 +806,19 @@ func main() {
 		err = row.Scan(&GUID, &Title, &Link, &Content, &PublicationDate, &IsRead, &Author, &FeedTitle, &ImageUrl, &Excerpt)
 		if err != nil {
 			log.Printf("POST /post/%v: getting all post data: %v", id, err)
-			return c.Render("error", fiber.Map{"Error": "Failed Reimporting Post", "Reason": "Couldn't load data"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Reimporting Post",
+				"Description": "Couldn't load data",
+			})
 		}
 
 		article, err = ParseArticle(Link, 30*time.Second)
 		if err != nil {
 			log.Printf("POST /post/%v: parsing article: %v", id, err)
-			return c.Render("error", fiber.Map{"Error": "Failed Reimporting Post", "Reason": "Couldn't parse article"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Reimporting Post",
+				"Description": "Couldn't parse article",
+			})
 		}
 
 		if article.Title != "" {
@@ -821,7 +840,10 @@ func main() {
 		_, err = updatePostAllDataQuery.Exec(GUID, Title, Link, Content, PublicationDate, IsRead, Author, FeedTitle, ImageUrl, Excerpt, id)
 		if err != nil {
 			log.Printf("POST /post/%v: updating post: %v", id, err)
-			return c.Render("error", fiber.Map{"Error": "Failed Reimporting Post", "Reason": "Couldn't parse article"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Reimporting Post",
+				"Description": "Couldn't parse article",
+			})
 		}
 
 		return c.Redirect(fmt.Sprintf("/post/%v", id))
@@ -849,7 +871,7 @@ func main() {
 		rows, err := allFeedsQuery.Query()
 		if err != nil {
 			log.Printf("GET /feed: get all feeds: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Loading Feeds"})
+			return c.Render("status", fiber.Map{"Name": "Failed Loading Feeds"})
 		}
 		defer rows.Close()
 
@@ -865,7 +887,7 @@ func main() {
 			feeds = append(feeds, feed)
 		}
 
-		return c.Render("feedList", fiber.Map{"Feeds": feeds})
+		return c.Render("feedList", fiber.Map{"Styles": []string{"/feed-list.css"}, "Feeds": feeds})
 	})
 
 	newFeedQuery, err := db.Prepare(`
@@ -880,13 +902,19 @@ func main() {
 	app.Post("/feed", func(c *fiber.Ctx) error {
 		rssUrl := c.FormValue("url")
 		if rssUrl == "" {
-			return c.Render("error", fiber.Map{"Error": "Failed to Create Feed", "Reason": "Missing RSS-URL"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed to Create Feed",
+				"Description": "Missing RSS-URL",
+			})
 		}
 
 		feed, err := feedParser.ParseURL(rssUrl)
 		if err != nil {
 			log.Printf("POST /feed: parse feed: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed to Create Feed", "Reason": fmt.Sprintf("Failed parsing RSS-Feed \"%s\"", rssUrl)})
+			return c.Render("status", fiber.Map{
+				"Name":   "Failed to Create Feed",
+				"Reason": fmt.Sprintf("Failed parsing RSS-Feed \"%s\"", rssUrl),
+			})
 		}
 
 		feedLink := feed.FeedLink
@@ -897,12 +925,18 @@ func main() {
 		_, err = newFeedQuery.Exec(feed.Title, feed.Description, feedLink, 0, feed.Language, "", "") // feed.Image.URL, feed.Image.Title)
 		if err != nil {
 			log.Printf("POST /feed: add feed: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed to Create Feed", "Reason": "Failed database query"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed to Create Feed",
+				"Description": "Failed database query",
+			})
 		}
 
 		go fetchFeedPosts(feedParser, policy, feedLink)
 
-		return c.Render("feedAdd", fiber.Map{"Title": feed.Title})
+		return c.Render("status", fiber.Map{
+			"Name":        "Added Feed Successfully",
+			"Description": fmt.Sprintf("Added feed with title %v", feed.Title),
+		})
 	})
 
 	feedQuery, err := db.Prepare(`
@@ -952,7 +986,10 @@ func main() {
 		title, err := url.PathUnescape(c.Params("title"))
 		if err != nil {
 			log.Printf("GET /feed/:title: get title: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Getting Feed", "Reason": "Invalid title"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Getting Feed",
+				"Description": "Invalid title",
+			})
 		}
 
 		row := feedQuery.QueryRow(title)
@@ -962,13 +999,19 @@ func main() {
 		err = row.Scan(&feed.Title, &feed.Description, &feed.Link, &feed.Language, &feed.ImageUrl, &feed.ImageTitle)
 		if err != nil {
 			log.Printf("GET /feed/:title: scan feed row: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Getting Feed", "Reason": fmt.Sprintf("Couldn't load data for \"%s\"", title)})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Getting Feed",
+				"Description": fmt.Sprintf("Couldn't load data for \"%s\"", title),
+			})
 		}
 
 		rows, err := feedCategoriesByTitleQuery.Query(title)
 		if err != nil {
 			log.Printf("GET /feed/:title: get feed categories: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Getting Feed", "Reason": "Couldn't load Categories"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Getting Feed",
+				"Description": "Couldn't load Categories",
+			})
 		}
 		defer rows.Close()
 
@@ -990,7 +1033,7 @@ func main() {
 			categories = append(categories, value)
 		}
 
-		return c.Render("feed", fiber.Map{"Feed": feed, "Categories": categories})
+		return c.Render("feed", fiber.Map{"Styles": []string{"/feed.css"}, "Feed": feed, "Categories": categories})
 	})
 
 	removeFeedQuery, err := db.Prepare(`
@@ -1044,13 +1087,19 @@ func main() {
 		title, err = url.PathUnescape(c.Params("title"))
 		if err != nil {
 			log.Printf("POST /feed/:title: get title from param: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Feed Operation", "Reason": "Invalid feed title"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Feed Operation",
+				"Description": "Invalid feed title",
+			})
 		}
 
 		form, err = c.MultipartForm()
 		if err != nil {
 			log.Printf("POST /feed/:title: get multipart form: %v", err)
-			return c.Render("error", fiber.Map{"Error": "Failed Feed Operation", "Reason": "Invalid multipart form"})
+			return c.Render("status", fiber.Map{
+				"Name":        "Failed Feed Operation",
+				"Description": "Invalid multipart form",
+			})
 		}
 
 		var method string
@@ -1064,19 +1113,31 @@ func main() {
 			_, err = removeFeedQuery.Exec(title)
 			if err != nil {
 				log.Printf("POST /feed/:title: remove feed %v: %v", title, err)
-				return c.Render("error", fiber.Map{"Error": "Failed to Remove Feed", "Reason": "Server error"})
+				return c.Render("status", fiber.Map{
+					"Name":        "Failed to Remove Feed",
+					"Description": "Server error",
+				})
 			}
 
-			return c.Render("feedRemove", fiber.Map{"RemovedFeedTitle": title})
+			return c.Render("status", fiber.Map{
+				"Name":        "Deleted Feed Successfully",
+				"Description": fmt.Sprintf("Deleted feed with title %v", title),
+			})
 		default:
 			if len(form.Value["title"]) == 0 || len(form.Value["description"]) == 0 || len(form.Value["link"]) == 0 {
-				return c.Render("error", fiber.Map{"Error": "Failed Updateting Feed", "Reason": "Incomplete form data"})
+				return c.Render("status", fiber.Map{
+					"Name":        "Failed Updating Feed",
+					"Description": "Incomplete form data",
+				})
 			}
 
 			_, err = updateFeedQuery.Exec(form.Value["title"][0], form.Value["description"][0], form.Value["link"][0], title)
 			if err != nil {
 				log.Printf("POST /feed/:title: update feed: %v", err)
-				return c.Render("error", fiber.Map{"Error": "Failed Updateting Feed", "Reason": "Server error"})
+				return c.Render("status", fiber.Map{
+					"Name":        "Failed Updateting Feed",
+					"Description": "Server error",
+				})
 			}
 
 			// the query rows have to be closed before making further operations on the same table
@@ -1088,7 +1149,10 @@ func main() {
 				rows, err := feedCategoriesByTitleQuery.Query(title)
 				if err != nil {
 					log.Printf("POST /feed/:title: get categories: %v", err)
-					return c.Render("error", fiber.Map{"Error": "Failed Updateting Feed", "Reason": "Server error"})
+					return c.Render("status", fiber.Map{
+						"Name":        "Failed Updateting Feed",
+						"Description": "Server error",
+					})
 				}
 				defer rows.Close()
 
@@ -1137,7 +1201,10 @@ func main() {
 				}
 			}
 
-			return c.Render("feedUpdate", fiber.Map{"RemovedFeedTitle": title})
+			return c.Render("status", fiber.Map{
+				"Name":        "Updated Feed Successfully",
+				"Description": fmt.Sprintf("Updated feed with title %v", title),
+			})
 		}
 	})
 

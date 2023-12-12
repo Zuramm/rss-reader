@@ -1,20 +1,20 @@
-<main>
+<main class="feed">
     <form method="POST" enctype="multipart/form-data">
         {{ if .ImageUrl }}
         <img src="{{ .ImageUrl }}" alt="{{ .ImageTitle }}" height="24" />
         {{ end }}
         <h1>Edit Feed</h1>
-        <label>RSS-Feed URL: <input type="url" name="link" value="{{ .Feed.Link }}"></label><br />
-        <label>Title: <input name="title" value="{{ .Feed.Title }}" /></label><br>
-        <label>Description: <textarea name="description">{{ .Feed.Description }}</textarea></label><br />
+        <label class="main">RSS-Feed URL: <input type="url" name="link" value="{{ .Feed.Link }}"></label><br />
+        <label class="main">Title: <input name="title" value="{{ .Feed.Title }}" /></label><br>
+        <label class="main">Description: <textarea name="description">{{ .Feed.Description }}</textarea></label><br />
         <fieldset>
             <legend>Categories:</legend>
-            <label>
-                New Cateogry Name:
+            <label class="new-category">
+                New Category Name:
                 <input name="category" />
             </label>
             {{ range .Categories }}
-            <label>
+            <label class="category">
                 <input type="checkbox" name="category" value="{{ .Name }}" {{- if .Active }} checked {{- end }} />
                 {{ .Name }}
             </label>
@@ -24,5 +24,6 @@
         <button name="method" value="remove">Remove Feed</button>
         <button>Save Changes</button>
     </form>
-    <a href="/?feed={{ .Feed.Title }}">Show all posts from this feed</a>
+    <br />
+    <a href="/?feed={{ pathEscape .Feed.Title }}">Show all posts from this feed</a>
 </main>

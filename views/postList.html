@@ -1,60 +1,77 @@
-<main>
+<main class="post-list">
     <h1>Posts</h1>
 
-    <form id="searchform">
-        <label>Feed Category:
-            <select name="feedCategory" multiple>
-                {{ range .FeedCategories }}
-                <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
-                {{ end }}
-            </select>
-        </label>
-        <label>Feed:
-            <select name="feed" multiple>
-                {{ range .Feeds }}
-                <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
-                {{ end }}
-            </select>
-        </label>
-        <label>Post Category:
-            <select name="postCategory" multiple>
-                {{ range .PostCategories }}
-                <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
-                {{ end }}
-            </select>
-        </label>
-        <label>
-            <input type="checkbox" name="oldestFirst" {{- if .OldestFirst }} checked{{ end }} />
-            Oldest first
-        </label>
-        <label>
-            <input type="checkbox" name="allPosts" {{- if .AllPosts }} checked{{ end }} />
-            Show all posts
-        </label>
-        <input type="search" name="query" value="{{ .Query }}" />
-        <button>Search</button>
-    </form>
+    <section>
+        <form id="searchform">
+            <label>
+                <div>Feed Category:</div>
+                <select name="feedCategory" multiple>
+                    {{ range .FeedCategories }}
+                    <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
+                    {{ end }}
+                </select>
+            </label>
+            <label>
+                <div>Feed:</div>
+                <select name="feed" multiple>
+                    {{ range .Feeds }}
+                    <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
+                    {{ end }}
+                </select>
+            </label>
+            <label>
+                <div>Post Category:</div>
+                <select name="postCategory" multiple>
+                    {{ range .PostCategories }}
+                    <option {{ if .Selected }}selected{{ end }}>{{ .Title }}</option>
+                    {{ end }}
+                </select>
+            </label>
+            <div class="search-section">
+                <div>
+                    <label>
+                        <input type="checkbox" name="oldestFirst" {{- if .OldestFirst }} checked{{ end }} />
+                        Oldest first
+                    </label>
+                    <label>
+                        <input type="checkbox" name="allPosts" {{- if .AllPosts }} checked{{ end }} />
+                        Show all posts
+                    </label>
+                </div>
+                <div class="search">
+                    <input type="search" name="query" value="{{ .Query }}" />
+                    <button>Search</button>
+                </div>
+            </div>
+        </form>
+    </section>
 
     <span>Found {{ .Results }} Posts</span>
 
     <button form="searchform" name="page" value="0">First Page</button>
     <button form="searchform" name="page" value="{{ .PagePrev }}">Previous Page</button>
+    <section class="all-posts">
 
-    {{ range .Posts }}
-    <article>
-        <header>
+        {{ range .Posts }}
+        <article>
             {{ if .ImageUrl }}
-            <img src="{{ .ImageUrl }}" alt="" loading="lazy" width="400" height="300" style="object-fit: cover;" />
+            <img src="{{ .ImageUrl }}" alt="" loading="lazy" height="300" />
+            {{ else }}
+            <div class="placeholder" aria-hidden="true"></div>
             {{ end }}
-            <a href="post/{{ .Rowid }}">
-                <h2>{{ if not .IsRead }}<span>new*</span> {{ end }}{{ .Title }}</h2>
-            </a>
-            <p>By {{ .Author }} in {{ .FeedTitle }} at <time>{{ .PublicationDate }}</time>
-            </p>
-        </header>
-        <p>{{ htmlSafe .Excerpt }}</p>
-    </article>
-    {{ end }}
+            <div>
+                <header>
+                    <a href="post/{{ .Rowid }}">
+                        <h2>{{ if not .IsRead }}<span>new*</span> {{ end }}{{ .Title }}</h2>
+                    </a>
+                    <p>By {{ .Author }} in {{ .FeedTitle }} at <time>{{ .PublicationDate }}</time>
+                    </p>
+                </header>
+                <p>{{ htmlSafe .Excerpt }}</p>
+            </div>
+        </article>
+        {{ end }}
+    </section>
 
     <button form="searchform" name="page" value="{{ .PageNext }}">Next Page</button>
 </main>
