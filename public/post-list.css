@@ -57,6 +57,17 @@
     margin-top: var(--size-2);
 }
 
+.all-posts .badge {
+  color: white;
+  background: var(--color-blue);
+  border-radius: 9999px;
+  padding: var(--size-1) var(--size-2);
+  font-size: var(--scale-000);
+  text-transform: uppercase;
+  font-family: var(--font-sans);
+  vertical-align: middle;
+}
+
 .post-list .all-posts > article header p {
     margin-top: var(--size-1);
     font-family: var(--font-sans);

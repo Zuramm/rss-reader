@@ -61,9 +61,10 @@
             {{ end }}
             <div>
                 <header>
-                    <a href="post/{{ .Rowid }}">
-                        <h2>{{ if not .IsRead }}<span>new*</span> {{ end }}{{ .Title }}</h2>
-                    </a>
+                    <h2>
+                        {{ if not .IsRead }}<span class="badge">new*</span> {{ end }}
+                        <a href="post/{{ .Rowid }}">{{ .Title }}</a>
+                    </h2>
                     <p>By {{ .Author }} in {{ .FeedTitle }} at <time>{{ .PublicationDate }}</time>
                     </p>
                 </header>
