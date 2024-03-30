@@ -1,5 +1,5 @@
 GO = go
-GOFLAGS = --tags "fts"
+GOFLAGS = --tags "fts5"
 
 TARGET = rss_reader
 
@@ -11,13 +11,13 @@ exec_prefix = $(prefix)
 bin_dir = $(exex_prefix)/bin
 
 $(TARGET): mods
-	$(GO) build $(GOFLAGS) -o $(TARGET) main.go
+	$(GO) build $(GOFLAGS) -o $(TARGET) .
 
 clean:
 	rm -f $(TARGET)
 
 run:
-	$(GO) run $(GOFLAGS) main.go
+	$(GO) run $(GOFLAGS) .
 
 mods:
 	$(GO) mod download
