@@ -65,7 +65,7 @@
                         {{ if not .IsRead }}<span class="badge">new*</span> {{ end }}
                         <a href="post/{{ .Rowid }}">{{ .Title }}</a>
                     </h2>
-                    <p>By {{ .Author }} in {{ .FeedTitle }} at <time>{{ .PublicationDate }}</time>
+                    <p>By {{ .Author }} in {{ .FeedTitle }} {{ reltime .PublicationDate }}
                     </p>
                 </header>
                 <p>{{ htmlSafe .Excerpt }}</p>

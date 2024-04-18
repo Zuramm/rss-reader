@@ -15,6 +15,7 @@ import (
 	"github.com/gofiber/template/html/v2"
 	"github.com/mattn/go-sqlite3"
 	_ "github.com/mattn/go-sqlite3"
+	"github.com/mergestat/timediff"
 	"github.com/microcosm-cc/bluemonday"
 	"github.com/mmcdole/gofeed"
 )
@@ -275,6 +276,27 @@ func main() {
 	engine.AddFunc("pathEscape", url.PathEscape)
 	engine.AddFunc("htmlSafe", func(html string) template.HTML {
 		return template.HTML(html)
+	})
+	engine.AddFunc("datetime", func(timestamp int64) template.HTML {
+		t := time.Unix(timestamp, 0)
+		return template.HTML(
+			fmt.Sprintf(
+				"<time datetime=\"%s\">%s</time>",
+				t.Format(time.RFC3339),
+				t.Format(time.UnixDate),
+			),
+		)
+	})
+
+	engine.AddFunc("reltime", func(timestamp int64) template.HTML {
+		t := time.Unix(timestamp, 0)
+		return template.HTML(
+			fmt.Sprintf(
+				"<time datetime=\"%s\">%s</time>",
+				t.Format(time.RFC3339),
+				timediff.TimeDiff(t),
+			),
+		)
 	})
 
 	// Pass the engine to the Views
@@ -738,15 +760,12 @@ func main() {
 			categories = append(categories, category)
 		}
 
-		publicationDate := time.Unix(post.PublicationDate, 0)
-
 		return c.Render("post", fiber.Map{
 			"Styles":     []string{"/post.css"},
 			"Title":      post.Title,
 			"Post":       post,
 			"Categories": categories,
-			"Date":       publicationDate.Format("2006-01-02T15:04:05Z"),
-			"HumanDate":  publicationDate.Format("Mon Jan 2 15:04:05 MST 2006"),
+			"Date":       post.PublicationDate,
 			"Content":    template.HTML(post.Content)},
 		)
 	})

@@ -48,6 +48,8 @@ github.com/mattn/go-runewidth v0.0.15 h1:UNAjwbU9l54TA3KzvqLGxwWjHmMgBUVhBiTjelZ
 github.com/mattn/go-runewidth v0.0.15/go.mod h1:Jdepj2loyihRzMpdS35Xk/zdY8IAYHsh153qUoGf23w=
 github.com/mattn/go-sqlite3 v1.14.18 h1:JL0eqdCOq6DJVNPSvArO/bIV9/P7fbGrV00LZHc+5aI=
 github.com/mattn/go-sqlite3 v1.14.18/go.mod h1:2eHXhiwb8IkHr+BDWZGa96P6+rkvnG63S2DGjv9HUNg=
+github.com/mergestat/timediff v0.0.3 h1:ucCNh4/ZrTPjFZ081PccNbhx9spymCJkFxSzgVuPU+Y=
+github.com/mergestat/timediff v0.0.3/go.mod h1:yvMUaRu2oetc+9IbPLYBJviz6sA7xz8OXMDfhBl7YSI=
 github.com/microcosm-cc/bluemonday v1.0.26 h1:xbqSvqzQMeEHCqMi64VAs4d8uy6Mequs3rQ0k/Khz58=
 github.com/microcosm-cc/bluemonday v1.0.26/go.mod h1:JyzOCs9gkyQyjs+6h10UEVSe02CGwkhd72Xdqh78TWs=
 github.com/mmcdole/gofeed v1.2.1 h1:tPbFN+mfOLcM1kDF1x2c/N68ChbdBatkppdzf/vDe1s=

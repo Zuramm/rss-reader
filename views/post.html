@@ -8,7 +8,7 @@
             <a href="{{ .Post.Link }}">Original article</a>
             by {{ .Post.Author }}
             in <a href="/feed/{{ pathEscape .Post.FeedTitle }}">{{ .Post.FeedTitle }}</a>
-            at <time datetime="{{ .Date }}">{{ .HumanDate }}</time>
+            at {{ datetime .Date }}
         </p>
         <ul>
             {{ range .Categories }}
