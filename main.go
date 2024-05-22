@@ -7,6 +7,7 @@ import (
 	"log"
 	"mime/multipart"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -260,7 +261,11 @@ func main() {
 	policy := bluemonday.UGCPolicy()
 
 	log.Print("open database")
-	db, err := sql.Open("sqlite3", "./feeds")
+    dbFilename := os.Getenv("DB_FILENAME")
+    if dbFilename == "" {
+        dbFilename = "./feeds.db"
+    }
+	db, err := sql.Open("sqlite3", dbFilename)
 	if err != nil {
 		log.Fatalf("main: open database: %v", err)
 	}
