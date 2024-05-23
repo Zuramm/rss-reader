@@ -28,6 +28,20 @@ const (
 	FEED_TYPE_WEB_SUB  = iota
 )
 
+func min(a, b int) int {
+    if a < b {
+        return a
+    }
+    return b
+}
+
+func max(a, b int) int {
+    if a > b {
+        return a
+    }
+    return b
+}
+
 func removeUnordered[Type any](s []Type, i int) []Type {
 	s[i] = s[len(s)-1]
 	return s[:len(s)-1]
