@@ -274,11 +274,11 @@ func main() {
 
 	policy := bluemonday.UGCPolicy()
 
-	log.Print("open database")
     dbFilename := os.Getenv("DB_FILENAME")
     if dbFilename == "" {
         dbFilename = "./feeds.db"
     }
+	log.Printf("open database %v", dbFilename)
 	db, err := sql.Open("sqlite3", dbFilename)
 	if err != nil {
 		log.Fatalf("main: open database: %v", err)
