@@ -29,17 +29,17 @@ const (
 )
 
 func min(a, b int) int {
-    if a < b {
-        return a
-    }
-    return b
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func max(a, b int) int {
-    if a > b {
-        return a
-    }
-    return b
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func removeUnordered[Type any](s []Type, i int) []Type {
@@ -274,16 +274,64 @@ func main() {
 
 	policy := bluemonday.UGCPolicy()
 
-    dbFilename := os.Getenv("DB_FILENAME")
-    if dbFilename == "" {
-        dbFilename = "./feeds.db"
-    }
+	dbFilename := os.Getenv("DB_FILENAME")
+	if dbFilename == "" {
+		dbFilename = "./feeds.db"
+	}
 	log.Printf("open database %v", dbFilename)
+	_, err := os.Stat(dbFilename)
+	initDb := os.IsNotExist(err)
 	db, err := sql.Open("sqlite3", dbFilename)
 	if err != nil {
 		log.Fatalf("main: open database: %v", err)
 	}
 	defer db.Close()
+
+	if initDb {
+		_, err := db.Exec(`
+            CREATE TABLE Feed (
+                Title TEXT NOT NULL,
+                Link TEXT NOT NULL,
+                "Type" INTEGER NOT NULL,
+                "Language" TEXT,
+                ImageUrl TEXT,
+                ImageTitle TEXT, Description TEXT NOT NULL,
+                CONSTRAINT Feed_PK PRIMARY KEY (Title)
+            );
+
+            CREATE TABLE FeedCategory (
+                FeedTitle TEXT NOT NULL,
+                Category TEXT NOT NULL,
+                CONSTRAINT FeedCategory_FK FOREIGN KEY (FeedTitle) REFERENCES Feed(Title) ON DELETE CASCADE ON UPDATE CASCADE,
+                UNIQUE(FeedTitle, Category) ON CONFLICT REPLACE
+            );
+
+            CREATE TABLE Post (
+                GUID TEXT NOT NULL UNIQUE ON CONFLICT IGNORE,
+                Title TEXT NOT NULL,
+                Link TEXT NOT NULL,
+                Content TEXT NOT NULL,
+                PublicationDate INTEGER NOT NULL,
+                IsRead INTEGER DEFAULT(0) NOT NULL,
+                Author TEXT,
+                "FeedTitle" TEXT NOT NULL,
+                ImageUrl TEXT,
+                Excerpt TEXT,
+                CONSTRAINT Post_FeedTitle_FK FOREIGN KEY ("FeedTitle") REFERENCES Feed (Title) ON DELETE CASCADE ON UPDATE CASCADE
+            );
+
+            CREATE VIRTUAL TABLE PostIdx USING fts5(Title, "Content", Author, content='Post');
+
+            CREATE TABLE PostCategory (
+                Post_FK TEXT NOT NULL,
+                Category TEXT NOT NULL,
+                CONSTRAINT PostCategory_Post_FK FOREIGN KEY (Post_FK) REFERENCES Post (rowid) ON DELETE CASCADE ON UPDATE CASCADE
+            );
+        `)
+		if err != nil {
+			log.Fatalf("main: init database: %v", err)
+		}
+	}
 
 	initFetchQuery(db)
 	defer closeFetchQuery()
