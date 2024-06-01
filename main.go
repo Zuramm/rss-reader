@@ -8,6 +8,7 @@ import (
 	"mime/multipart"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 	"time"
 
@@ -274,14 +275,14 @@ func main() {
 
 	policy := bluemonday.UGCPolicy()
 
-	dbFilename := os.Getenv("DB_FILENAME")
-	if dbFilename == "" {
-		dbFilename = "./feeds.db"
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "./feeds.db"
 	}
-	log.Printf("open database %v", dbFilename)
-	_, err := os.Stat(dbFilename)
+	log.Printf("open database %v", dbPath)
+	_, err := os.Stat(dbPath)
 	initDb := os.IsNotExist(err)
-	db, err := sql.Open("sqlite3", dbFilename)
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		log.Fatalf("main: open database: %v", err)
 	}
@@ -339,7 +340,16 @@ func main() {
 	go fetchFeeds(feedParser, policy, db)
 
 	// Create a new engine
-	engine := html.New("./views", ".html")
+	viewsPath := os.Getenv("VIEWS_PATH")
+	if viewsPath == "" {
+		execPath, err := os.Executable()
+		if err != nil {
+			viewsPath = "./views"
+		} else {
+			viewsPath = path.Join(path.Dir(execPath), "views")
+		}
+	}
+	engine := html.New(viewsPath, ".html")
 	engine.AddFunc("pathEscape", url.PathEscape)
 	engine.AddFunc("htmlSafe", func(html string) template.HTML {
 		return template.HTML(html)
