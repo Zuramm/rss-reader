@@ -1337,6 +1337,8 @@ func main() {
 				}
 			}
 
+			go fetchFeedPosts(feedParser, policy, form.Value["link"][0])
+
 			return c.Render("status", fiber.Map{
 				"Title":       "Updated Feed",
 				"Name":        "Updated Feed Successfully",

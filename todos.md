@@ -1,6 +1,5 @@
 # TODOS
 
-* Allow updating feeds with a button
 * Import Export OMPL
 * Make everything pretty
 * Minimize html when sending it using [minify](https://github.com/tdewolff/minify).
