@@ -8,7 +8,6 @@ import (
 	"mime/multipart"
 	"net/url"
 	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -342,12 +341,7 @@ func main() {
 	// Create a new engine
 	viewsPath := os.Getenv("VIEWS_PATH")
 	if viewsPath == "" {
-		execPath, err := os.Executable()
-		if err != nil {
-			viewsPath = "./views"
-		} else {
-			viewsPath = path.Join(path.Dir(execPath), "views")
-		}
+        viewsPath = "./views"
 	}
 	engine := html.New(viewsPath, ".html")
 	engine.AddFunc("pathEscape", url.PathEscape)
