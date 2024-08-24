@@ -4,9 +4,15 @@
         <img src="{{ .ImageUrl }}" alt="{{ .ImageTitle }}" height="24" />
         {{ end }}
         <h1>Edit Feed</h1>
-        <label class="main">RSS-Feed URL: <input type="url" name="link" value="{{ .Feed.Link }}"></label><br />
-        <label class="main">Title: <input name="title" value="{{ .Feed.Title }}" /></label><br>
+        <label class="main">RSS-Feed URL: <input type="url" name="link" value="{{ .Feed.Link }}" /></label><br />
+        <label class="main">Title: <input name="title" value="{{ .Feed.Title }}" /></label><br />
         <label class="main">Description: <textarea name="description">{{ .Feed.Description }}</textarea></label><br />
+        <label class="main">Language: <input list="languageSuggestions" name="language" value="{{ .Feed.Language }}" /></label><br />
+        <datalist id="languageSuggestions">
+            {{ range .LanguageSuggestions }}
+            <option value="{{ . }}"></option>
+            {{ end }}
+        </datalist>
         <fieldset>
             <legend>Categories:</legend>
             <label class="new-category">

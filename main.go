@@ -1091,6 +1091,19 @@ func main() {
 	}
 	defer feedCategoriesByTitleQuery.Close()
 
+	feedLanguagesQuery, err := db.Prepare(`
+	SELECT DISTINCT
+		Language
+	FROM
+		Feed
+	ORDER BY
+		Language ASC;
+	`)
+	if err != nil {
+		log.Fatalf("main: prepare feed languages query: %v", err)
+	}
+	defer feedLanguagesQuery.Close()
+
 	app.Get("/feed/:title", func(c *fiber.Ctx) error {
 		title, err := url.PathUnescape(c.Params("title"))
 		if err != nil {
@@ -1145,11 +1158,32 @@ func main() {
 			categories = append(categories, value)
 		}
 
+		rows, err = feedLanguagesQuery.Query()
+		if err != nil {
+			log.Printf("GET /feed/:title: get feed categories: %v", err)
+		}
+
+		var languageSuggestions []string
+
+		if rows != nil {
+			for rows.Next() {
+				var value string
+				err = rows.Scan(&value)
+				if err != nil {
+					log.Printf("GET /feed/:title: scan feed languages: %v", err)
+				}
+
+				languageSuggestions = append(languageSuggestions, value)
+			}
+		}
+
 		return c.Render("feed", fiber.Map{
-			"Styles":     []string{"/feed.css"},
-			"Title":      feed.Title,
-			"Feed":       feed,
-			"Categories": categories,
+			"Styles":              []string{"/feed.css"},
+			"Title":               feed.Title,
+			"Feed":                feed,
+			"Categories":          categories,
+			"Language":            feed.Language,
+			"LanguageSuggestions": languageSuggestions,
 		})
 	})
 
