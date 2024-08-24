@@ -72,6 +72,7 @@ type Post struct {
 	Author          string
 	FeedTitle       string
 	ImageUrl        string
+	Language        string
 }
 
 var fetchQuery struct {
@@ -289,45 +290,45 @@ func main() {
 
 	if initDb {
 		_, err := db.Exec(`
-            CREATE TABLE Feed (
-                Title TEXT NOT NULL,
-                Link TEXT NOT NULL,
-                "Type" INTEGER NOT NULL,
-                "Language" TEXT,
-                ImageUrl TEXT,
-                ImageTitle TEXT, Description TEXT NOT NULL,
-                CONSTRAINT Feed_PK PRIMARY KEY (Title)
-            );
+		CREATE TABLE Feed (
+			Title TEXT NOT NULL,
+			Link TEXT NOT NULL,
+			"Type" INTEGER NOT NULL,
+			"Language" TEXT,
+			ImageUrl TEXT,
+			ImageTitle TEXT, Description TEXT NOT NULL,
+			CONSTRAINT Feed_PK PRIMARY KEY (Title)
+		);
 
-            CREATE TABLE FeedCategory (
-                FeedTitle TEXT NOT NULL,
-                Category TEXT NOT NULL,
-                CONSTRAINT FeedCategory_FK FOREIGN KEY (FeedTitle) REFERENCES Feed(Title) ON DELETE CASCADE ON UPDATE CASCADE,
-                UNIQUE(FeedTitle, Category) ON CONFLICT REPLACE
-            );
+		CREATE TABLE FeedCategory (
+			FeedTitle TEXT NOT NULL,
+			Category TEXT NOT NULL,
+			CONSTRAINT FeedCategory_FK FOREIGN KEY (FeedTitle) REFERENCES Feed(Title) ON DELETE CASCADE ON UPDATE CASCADE,
+			UNIQUE(FeedTitle, Category) ON CONFLICT REPLACE
+		);
 
-            CREATE TABLE Post (
-                GUID TEXT NOT NULL UNIQUE ON CONFLICT IGNORE,
-                Title TEXT NOT NULL,
-                Link TEXT NOT NULL,
-                Content TEXT NOT NULL,
-                PublicationDate INTEGER NOT NULL,
-                IsRead INTEGER DEFAULT(0) NOT NULL,
-                Author TEXT,
-                "FeedTitle" TEXT NOT NULL,
-                ImageUrl TEXT,
-                Excerpt TEXT,
-                CONSTRAINT Post_FeedTitle_FK FOREIGN KEY ("FeedTitle") REFERENCES Feed (Title) ON DELETE CASCADE ON UPDATE CASCADE
-            );
+		CREATE TABLE Post (
+			GUID TEXT NOT NULL UNIQUE ON CONFLICT IGNORE,
+			Title TEXT NOT NULL,
+			Link TEXT NOT NULL,
+			Content TEXT NOT NULL,
+			PublicationDate INTEGER NOT NULL,
+			IsRead INTEGER DEFAULT(0) NOT NULL,
+			Author TEXT,
+			"FeedTitle" TEXT NOT NULL,
+			ImageUrl TEXT,
+			Excerpt TEXT,
+			CONSTRAINT Post_FeedTitle_FK FOREIGN KEY ("FeedTitle") REFERENCES Feed (Title) ON DELETE CASCADE ON UPDATE CASCADE
+		);
 
-            CREATE VIRTUAL TABLE PostIdx USING fts5(Title, "Content", Author, content='Post');
+		CREATE VIRTUAL TABLE PostIdx USING fts5(Title, "Content", Author, content='Post');
 
-            CREATE TABLE PostCategory (
-                Post_FK TEXT NOT NULL,
-                Category TEXT NOT NULL,
-                CONSTRAINT PostCategory_Post_FK FOREIGN KEY (Post_FK) REFERENCES Post (rowid) ON DELETE CASCADE ON UPDATE CASCADE
-            );
-        `)
+		CREATE TABLE PostCategory (
+			Post_FK TEXT NOT NULL,
+			Category TEXT NOT NULL,
+			CONSTRAINT PostCategory_Post_FK FOREIGN KEY (Post_FK) REFERENCES Post (rowid) ON DELETE CASCADE ON UPDATE CASCADE
+		);
+		`)
 		if err != nil {
 			log.Fatalf("main: init database: %v", err)
 		}
@@ -341,7 +342,7 @@ func main() {
 	// Create a new engine
 	viewsPath := os.Getenv("VIEWS_PATH")
 	if viewsPath == "" {
-        viewsPath = "./views"
+		viewsPath = "./views"
 	}
 	engine := html.New(viewsPath, ".html")
 	engine.AddFunc("pathEscape", url.PathEscape)
@@ -379,115 +380,118 @@ func main() {
 	app.Static("/", "./public")
 
 	allFeedsTitle, err := db.Prepare(`
-        SELECT
-            Title
-        FROM
-            Feed
-        ORDER BY
-            Title ASC;
-    `)
+	SELECT
+		Title
+	FROM
+		Feed
+	ORDER BY
+		Title ASC;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare all feeds title: %v", err)
 	}
 	defer allFeedsTitle.Close()
 
 	allFeedCategoriesQuery, err := db.Prepare(`
-        SELECT DISTINCT
-            Category
-        FROM
-            FeedCategory
-        ORDER BY
-            Category ASC;
-    `)
+	SELECT DISTINCT
+		Category
+	FROM
+		FeedCategory
+	ORDER BY
+		Category ASC;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare all feed categories: %v", err)
 	}
 	defer allFeedCategoriesQuery.Close()
 
 	allPostCategoriesQuery, err := db.Prepare(`
-        SELECT
-            Category
-        FROM
-            PostCategory
-        GROUP BY
-	        Category
-        HAVING
-	        COUNT(Post_FK) > 2
-        ORDER BY
-            Category ASC;
-    `)
+	SELECT
+		Category
+	FROM
+		PostCategory
+	GROUP BY
+		Category
+	HAVING
+		COUNT(Post_FK) > 2
+	ORDER BY
+		Category ASC;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare all post categories: %v", err)
 	}
 	defer allPostCategoriesQuery.Close()
 
 	allPostQueryStr := `
-        SELECT
-            rowid,
-            Post.Title,
-            Excerpt,
-            PublicationDate,
-            IsRead,
-            Post.Author,
-            FeedTitle,
-            ImageUrl
-        FROM
-            Post
-        %s;
-    `
+	SELECT
+		Post.rowid,
+		Post.Title,
+		Excerpt,
+		PublicationDate,
+		IsRead,
+		Post.Author,
+		FeedTitle,
+		Post.ImageUrl,
+		Language
+	FROM
+		Post
+	LEFT JOIN Feed ON Post.FeedTitle = Feed.Title
+	%s;
+	`
 
 	allPostQueryCountStr := `
-        SELECT
-            Count(*)
-        FROM
-            Post
-        %s;
-    `
+	SELECT
+		Count(*)
+	FROM
+		Post
+	%s;
+	`
 
 	allPostQuerySearchStr := `
-            INNER JOIN PostIdx
-        WHERE
-	        PostIdx MATCH ?
-	        AND Post.rowid = PostIdx.rowid
-    `
+		INNER JOIN PostIdx ON Post.rowid = PostIdx.rowid
+	WHERE
+		PostIdx MATCH ?
+	`
 
 	allPostQueryFeedTitleStr := `
-        FeedTitle IN(%s)
-    `
+		FeedTitle IN(%s)
+	`
 
 	allPostQueryFeedCategoryStr := `
-        FeedTitle IN(
-            SELECT
-                FeedTitle FROM FeedCategory
-            WHERE
-                Category IN(%s))
-    `
+	FeedTitle IN(
+		SELECT
+			FeedTitle FROM FeedCategory
+		WHERE
+			Category IN(%s)
+	)
+	`
 
 	allPostQueryPostCategoryStr := `
-        rowid IN(
-            SELECT
-                Post_FK FROM PostCategory
-            WHERE
-                Category IN(%s))
-    `
+	rowid IN(
+		SELECT
+			Post_FK FROM PostCategory
+		WHERE
+			Category IN(%s)
+	)
+	`
 
 	allPostQueryIsNotReadStr := `
-        IsRead = 0
-    `
+	IsRead = 0
+	`
 
 	allPostQuerySortPubDateDescStr := `
-        ORDER BY
-            PublicationDate DESC
-    `
+	ORDER BY
+		PublicationDate DESC
+	`
 
 	allPostQuerySortPubDateAscStr := `
-        ORDER BY
-            PublicationDate ASC
-    `
+	ORDER BY
+		PublicationDate ASC
+	`
 
 	allPostQueryPaginationStr := `
-        LIMIT ? OFFSET ?
-    `
+	LIMIT ? OFFSET ?
+	`
 
 	pageSize := 24
 
@@ -689,23 +693,10 @@ func main() {
 
 		for rows.Next() {
 			var post Post
-			var author, excerpt, imageUrl *string
-			err := rows.Scan(&post.Rowid, &post.Title, &excerpt, &post.PublicationDate, &post.IsRead, &author, &post.FeedTitle, &imageUrl)
+			err := rows.Scan(&post.Rowid, &post.Title, &post.Excerpt, &post.PublicationDate, &post.IsRead, &post.Author, &post.FeedTitle, &post.ImageUrl, &post.Language)
 			if err != nil {
 				log.Printf("GET /: get post data: %v", err)
 				continue
-			}
-
-			if author != nil {
-				post.Author = *author
-			}
-
-			if excerpt != nil {
-				post.Excerpt = *excerpt
-			}
-
-			if imageUrl != nil {
-				post.ImageUrl = *imageUrl
 			}
 
 			posts = append(posts, post)
@@ -730,45 +721,47 @@ func main() {
 	})
 
 	postQuery, err := db.Prepare(`
-        SELECT
-            Title,
-            Link,
-            Content,
-            PublicationDate,
-            Author,
-            FeedTitle,
-            ImageUrl
-        FROM
-            Post
-        WHERE
-            rowid = ?;
-    `)
+	SELECT
+		Post.Title,
+		Post.Link,
+		Content,
+		PublicationDate,
+		Author,
+		FeedTitle,
+		Post.ImageUrl,
+		Language
+	FROM
+		Post
+	LEFT JOIN Feed ON Post.FeedTitle = Feed.Title
+	WHERE
+		Post.rowid = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare post query: %v", err)
 	}
 	defer postQuery.Close()
 
 	readPostQuery, err := db.Prepare(`
-        UPDATE
-            Post
-        SET
-            IsRead = 1
-        WHERE
-            rowid = ?;
-    `)
+	UPDATE
+		Post
+	SET
+		IsRead = 1
+	WHERE
+		rowid = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare read post query: %v", err)
 	}
 	defer readPostQuery.Close()
 
 	postCategoryQuery, err := db.Prepare(`
-        SELECT
-            Category
-        FROM
-            PostCategory
-        WHERE
-            Post_FK = ?;
-    `)
+	SELECT
+		Category
+	FROM
+		PostCategory
+	WHERE
+		Post_FK = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare post category query: %v", err)
 	}
@@ -799,7 +792,7 @@ func main() {
 
 		var post Post
 
-		err = row.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedTitle, &post.ImageUrl)
+		err = row.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedTitle, &post.ImageUrl, &post.Language)
 		if err != nil {
 			log.Printf("GET /post/:id: get post data: %v", err)
 			return c.Render("status", fiber.Map{
@@ -842,44 +835,44 @@ func main() {
 	})
 
 	postAllDataQuery, err := db.Prepare(`
-        SELECT
-            GUID,
-            Title,
-            Link,
-            Content,
-            PublicationDate,
-            IsRead,
-            Author,
-            FeedTitle,
-            ImageUrl,
-            Excerpt
-        FROM
-            Post
-        WHERE
-            rowid = ?;
-    `)
+	SELECT
+		GUID,
+		Title,
+		Link,
+		Content,
+		PublicationDate,
+		IsRead,
+		Author,
+		FeedTitle,
+		ImageUrl,
+		Excerpt
+	FROM
+		Post
+	WHERE
+		rowid = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare post all data query: %v", err)
 	}
 	defer postAllDataQuery.Close()
 
 	updatePostAllDataQuery, err := db.Prepare(`
-        UPDATE
-            Post
-        SET
-            GUID = ?,
-            Title = ?,
-            Link = ?,
-            Content = ?,
-            PublicationDate = ?,
-            IsRead = ?,
-            Author = ?,
-            FeedTitle = ?,
-            ImageUrl = ?,
-            Excerpt = ?
-        WHERE
-            rowid = ?;
-    `)
+	UPDATE
+		Post
+	SET
+		GUID = ?,
+		Title = ?,
+		Link = ?,
+		Content = ?,
+		PublicationDate = ?,
+		IsRead = ?,
+		Author = ?,
+		FeedTitle = ?,
+		ImageUrl = ?,
+		Excerpt = ?
+	WHERE
+		rowid = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare update post all data query: %v", err)
 	}
@@ -954,18 +947,18 @@ func main() {
 	})
 
 	allFeedsQuery, err := db.Prepare(`
-        SELECT
-            Title,
-            Description,
-            "Link",
-            "Language",
-            ImageUrl,
-            ImageTitle
-        FROM
-            Feed
-        ORDER BY
-            Title ASC;
-    `)
+	SELECT
+		Title,
+		Description,
+		"Link",
+		"Language",
+		ImageUrl,
+		ImageTitle
+	FROM
+		Feed
+	ORDER BY
+		Title ASC;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare all feeds query: %v", err)
 	}
@@ -1002,9 +995,9 @@ func main() {
 	})
 
 	newFeedQuery, err := db.Prepare(`
-        INSERT INTO Feed(Title, Description, Link, Type, Language, ImageUrl, ImageTitle)
-            VALUES      (?,     ?,        ?,       ?,    ?,        ?,        ?         )
-    `)
+	INSERT INTO Feed(Title, Description, Link, Type, Language, ImageUrl, ImageTitle)
+	    VALUES      (?,     ?,        ?,       ?,    ?,        ?,        ?         )
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare new feed query: %v", err)
 	}
@@ -1055,43 +1048,44 @@ func main() {
 	})
 
 	feedQuery, err := db.Prepare(`
-        SELECT
-            Title,
-            Description,
-            "Link",
-            "Language",
-            ImageUrl,
-            ImageTitle
-        FROM
-            Feed
-        WHERE
-            Title = ?;
-    `)
+	SELECT
+		Title,
+		Description,
+		"Link",
+		"Language",
+		ImageUrl,
+		ImageTitle
+	FROM
+		Feed
+	WHERE
+		Title = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare feed query: %v", err)
 	}
 	defer feedQuery.Close()
 
 	feedCategoriesByTitleQuery, err := db.Prepare(`
-        SELECT DISTINCT
-            Category,
-            CASE WHEN EXISTS (
-                SELECT
-                    1
-                FROM
-                    FeedCategory
-                WHERE
-                    Category = t.Category
-                    AND FeedTitle = ?) THEN
-                1
-            ELSE
-                0
-            END AS TitleExists
-        FROM
-            FeedCategory t
-        ORDER BY
-            Category ASC;
-    `)
+	SELECT DISTINCT
+		Category,
+		CASE WHEN EXISTS (
+			SELECT
+				1
+			FROM
+				FeedCategory
+			WHERE
+				Category = t.Category
+			AND FeedTitle = ?)
+		THEN
+			1
+		ELSE
+			0
+		END AS TitleExists
+	FROM
+		FeedCategory t
+	ORDER BY
+		Category ASC;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare feed categories query: %v", err)
 	}
@@ -1160,43 +1154,43 @@ func main() {
 	})
 
 	removeFeedQuery, err := db.Prepare(`
-        DELETE FROM Feed
-        WHERE Title = ?;
-    `)
+	DELETE FROM Feed
+	WHERE Title = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare remove feed query: %v", err)
 	}
 	defer removeFeedQuery.Close()
 
 	updateFeedQuery, err := db.Prepare(`
-        UPDATE
-            Feed
-        SET
-            Title = ?,
-            Description = ?,
-            "Link" = ?
-        WHERE
-            Title = ?;
-    `)
+	UPDATE
+		Feed
+	SET
+		Title = ?,
+		Description = ?,
+		"Link" = ?
+	WHERE
+		Title = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare update feed query: %v", err)
 	}
 	defer updateFeedQuery.Close()
 
 	addFeedCategoryQuery, err := db.Prepare(`
-        INSERT INTO FeedCategory(FeedTitle, Category)
-            VALUES              (?        , ?       )
-    `)
+	INSERT INTO FeedCategory(FeedTitle, Category)
+		VALUES          (?        , ?       )
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare add feed category query: %v", err)
 	}
 	defer updateFeedQuery.Close()
 
 	removeFeedCategoryQuery, err := db.Prepare(`
-        DELETE FROM FeedCategory
-        WHERE FeedTitle = ?
-            AND Category = ?;
-    `)
+	DELETE FROM FeedCategory
+	WHERE FeedTitle = ?
+	AND Category = ?;
+	`)
 	if err != nil {
 		log.Fatalf("main: prepare remove feed category query: %v", err)
 	}

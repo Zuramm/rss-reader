@@ -21,6 +21,7 @@
 
 .post > article {
     font-family: var(--font-serif);
+    hyphens: auto;
 }
 
 .post > article p {

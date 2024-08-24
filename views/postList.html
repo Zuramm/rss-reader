@@ -51,9 +51,8 @@
     <button form="searchform" name="page" value="0">First Page</button>
     <button form="searchform" name="page" value="{{ .PagePrev }}">Previous Page</button>
     <section class="all-posts">
-
         {{ range .Posts }}
-        <article>
+        <article lang="{{ .Language }}">
             {{ if .ImageUrl }}
             <img src="{{ .ImageUrl }}" alt="" loading="lazy" height="300" />
             {{ else }}
@@ -62,10 +61,10 @@
             <div>
                 <header>
                     <h2>
-                        {{ if not .IsRead }}<span class="badge">new*</span> {{ end }}
+                        {{ if not .IsRead }}<span class="badge" lang="en-US">new*</span> {{ end }}
                         <a href="post/{{ .Rowid }}">{{ .Title }}</a>
                     </h2>
-                    <p>By {{ .Author }} in {{ .FeedTitle }} {{ reltime .PublicationDate }}
+                    <p lang="en-US">By {{ .Author }} in {{ .FeedTitle }} {{ reltime .PublicationDate }}
                     </p>
                 </header>
                 <p>{{ htmlSafe .Excerpt }}</p>

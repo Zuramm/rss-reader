@@ -3,7 +3,7 @@
         {{ if .Post.ImageUrl }}
         <img src="{{ .Post.ImageUrl }}" alt="" height="300" />
         {{ end }}
-        <h1>{{ .Post.Title }}</h1>
+        <h1 lang="{{ .Post.Language }}">{{ .Post.Title }}</h1>
         <p>
             <a href="{{ .Post.Link }}">Original article</a>
             by {{ .Post.Author }}
@@ -19,7 +19,7 @@
             <button>Reimport Post</button>
         </form>
     </header>
-    <article>
+    <article lang="{{ .Post.Language }}">
         {{ .Content }}
     </article>
 </main>
