@@ -51,16 +51,6 @@ func removeOrdered[Type any](slice []Type, s int) []Type {
 	return append(slice[:s], slice[s+1:]...)
 }
 
-type Feed struct {
-	Title       string
-	Description string
-	Link        string
-	Type        int
-	Language    string
-	ImageUrl    string
-	ImageTitle  string
-}
-
 type Post struct {
 	Rowid           string
 	Title           string
@@ -86,42 +76,45 @@ func initFetchQuery(db *sql.DB) {
 	var err error
 
 	feedListQuery, err := db.Prepare(`
-        SELECT
-            "Link"
-        FROM
-            Feed;
-    `)
+	SELECT
+		Title,
+		"Link",
+		IntervalSeconds,
+		DelaySeconds
+	FROM
+		Feed;
+	`)
 	if err != nil {
 		log.Fatalf("initFetchQuery: prepare feed list query: %v", err)
 	}
 	fetchQuery.feedList = feedListQuery
 
 	postsQuery, err := db.Prepare(`
-        SELECT
-            rowid
-        FROM
-            Post
-        WHERE
-            GUID = ?;
-    `)
+	SELECT
+		rowid
+	FROM
+		Post
+	WHERE
+		GUID = ?;
+	`)
 	if err != nil {
 		log.Fatalf("initFetchQuery: prepare post query: %v", err)
 	}
 	fetchQuery.posts = postsQuery
 
 	newPostQuery, err := db.Prepare(`
-        INSERT INTO Post(GUID, Title, "Link", Excerpt, Content, PublicationDate, Author, ImageUrl, FeedTitle)
-            VALUES      (?,    ?,     ?,      ?,       ?,       ?,               ?,      ?,        ?        )
-    `)
+	INSERT INTO Post(GUID, Title, "Link", Excerpt, Content, PublicationDate, Author, ImageUrl, FeedTitle)
+		VALUES  (?,    ?,     ?,      ?,       ?,       ?,               ?,      ?,        ?        )
+	`)
 	if err != nil {
 		log.Fatalf("initFetchQuery: prepare new post query: %v", err)
 	}
 	fetchQuery.newPost = newPostQuery
 
 	newPostCategoryQuery, err := db.Prepare(`
-        INSERT INTO PostCategory(Post_FK, Category)
-            VALUES              (?,       ?       )
-    `)
+	INSERT INTO PostCategory(Post_FK, Category)
+		VALUES          (?,       ?       )
+	`)
 	if err != nil {
 		log.Fatalf("initFetchQuery: prepare new post category: %v", err)
 	}
@@ -135,131 +128,183 @@ func closeFetchQuery() {
 	fetchQuery.newPostCategory.Close()
 }
 
-func fetchFeeds(feedParser *gofeed.Parser, policy *bluemonday.Policy, db *sql.DB) {
-	time.Sleep(5 * time.Minute)
+func spawnThreadsForFeedsInDB(feedParser *gofeed.Parser, policy *bluemonday.Policy, channels map[string]chan bool) {
+	// time.Sleep(5 * time.Minute)
 
-	for {
-		log.Printf("fetchFeeds: start")
-		var links []string
+	rows, err := fetchQuery.feedList.Query()
+	if err != nil {
+		log.Printf("fetchFeeds: get feed list from db: %v", err)
+		return
+	}
 
-		{
-			rows, err := fetchQuery.feedList.Query()
-			if err != nil {
-				log.Printf("fetchFeeds: get feed list from db: %v", err)
-				return
-			}
-			defer rows.Close()
+	var titleList, linkList []string
+	var intervalList, delayList []time.Duration
 
-			for rows.Next() {
-				var link string
-				err := rows.Scan(&link)
-				if err != nil {
-					log.Printf("fetchFeeds: scan feed row: %v", err)
-					continue
-				}
-
-				links = append(links, link)
-			}
+	for rows.Next() {
+		var title, link string
+		var intervalSeconds, delaySeconds int
+		err := rows.Scan(&title, &link, &intervalSeconds, &delaySeconds)
+		if err != nil {
+			log.Printf("fetchFeeds: scan feed row: %v", err)
+			continue
 		}
 
-		for _, link := range links {
-			fetchFeedPosts(feedParser, policy, link)
+		var interval = time.Duration(intervalSeconds) * time.Second
+		var delay = time.Duration(delaySeconds) * time.Second
+
+		titleList = append(titleList, title)
+		linkList = append(linkList, link)
+		intervalList = append(intervalList, interval)
+		delayList = append(delayList, delay)
+	}
+
+	rows.Close()
+
+	for i := 0; i < len(linkList); i++ {
+		shouldClose, ok := channels[titleList[i]]
+		if ok {
+			shouldClose <- true
+		} else {
+			shouldClose = make(chan bool)
+			channels[titleList[i]] = shouldClose
 		}
-
-		log.Printf("fetchFeeds: end")
-
-		time.Sleep(REFRESH_RATE)
+		go fetchPostsPeriodicallyFromFeed(feedParser, policy, linkList[i], intervalList[i], delayList[i], shouldClose)
 	}
 }
 
-func fetchFeedPosts(feedParser *gofeed.Parser, policy *bluemonday.Policy, link string) {
+func fetchPostsPeriodicallyFromFeed(feedParser *gofeed.Parser, policy *bluemonday.Policy, link string, interval time.Duration, delay time.Duration, shouldClose chan bool) {
 	var feed *gofeed.Feed
+	var err error
+
+	for {
+		feed, err = feedParser.ParseURL(link)
+		if err != nil {
+			log.Printf("fetchFeedPosts: parse feed %v: %v", link, err)
+			return
+		}
+
+		skipInterval := false
+
+		for _, item := range feed.Items {
+			didFetch := fetchPost(policy, feed, item)
+
+			if didFetch {
+				delayChan := time.After(delay)
+				for {
+					select {
+					case ud := <-shouldClose:
+						if ud {
+							return
+						} else {
+							skipInterval = true
+						}
+					case <-delayChan:
+					}
+				}
+			}
+		}
+
+		if !skipInterval {
+			select {
+			case ud := <-shouldClose:
+				if ud {
+					return
+				}
+			case <-time.After(interval):
+			}
+		} else {
+			select {
+			case ud := <-shouldClose:
+				if ud {
+					return
+				}
+			default:
+			}
+		}
+	}
+}
+
+func fetchPost(policy *bluemonday.Policy, feed *gofeed.Feed, item *gofeed.Item) bool {
 	var article readability.Article
 	var res sql.Result
 	var row *sql.Row
 	var rowid int64
 	var err error
 
-	feed, err = feedParser.ParseURL(link)
+	row = fetchQuery.posts.QueryRow(item.GUID)
+
+	err = row.Scan(&rowid)
+	if err == nil {
+		return false
+	} else if err != sql.ErrNoRows {
+		log.Printf("fetchFeedPosts: check if post exists: %v", err)
+		return false
+	}
+
+	log.Printf("parsing post %v", item.Title)
+
+	article, err = ParseArticle(item.Link, 30*time.Second)
 	if err != nil {
-		log.Printf("fetchFeedPosts: parse feed %v: %v", link, err)
-		return
+		log.Printf("fetchFeedPosts: parse post %s: %v", item.Link, err)
+		return true
 	}
 
-	for _, item := range feed.Items {
-		row = fetchQuery.posts.QueryRow(item.GUID)
+	var title string
+	if item.Title != "" {
+		title = item.Title
+	} else {
+		title = article.Title
+	}
 
-		err = row.Scan(&rowid)
-		if err == nil {
-			continue
-		} else if err != nil && err != sql.ErrNoRows {
-			log.Printf("fetchFeedPosts: check if post exists: %v", err)
-			continue
-		}
+	var image string
+	if item.Image != nil && item.Image.URL != "" {
+		image = item.Image.URL
+	} else {
+		image = article.Image
+	}
 
-		log.Printf("parsing post %v", item.Title)
+	var content string
+	if item.Content != "" {
+		content = item.Content
+	} else {
+		content = article.Content
+	}
 
-		article, err = ParseArticle(item.Link, 30*time.Second)
-		if err != nil {
-			log.Printf("fetchFeedPosts: parse post %s: %v", item.Link, err)
-			continue
-		}
+	// content = policy.Sanitize(content)
 
-		var title string
-		if item.Title != "" {
-			title = item.Title
-		} else {
-			title = article.Title
-		}
+	pubDate := time.Now().Unix()
 
-		var image string
-		if item.Image != nil && item.Image.URL != "" {
-			image = item.Image.URL
-		} else {
-			image = article.Image
-		}
+	if item.PublishedParsed != nil {
+		pubDate = item.PublishedParsed.Unix()
+	}
 
-		var content string
-		if item.Content != "" {
-			content = item.Content
-		} else {
-			content = article.Content
-		}
+	author := ""
+	if item.Author != nil {
+		author = item.Author.Name
+	}
 
-		// content = policy.Sanitize(content)
-
-		pubDate := time.Now().Unix()
-
-		if item.PublishedParsed != nil {
-			pubDate = item.PublishedParsed.Unix()
-		}
-
-		author := ""
-		if item.Author != nil {
-			author = item.Author.Name
-		}
-
-		res, err = fetchQuery.newPost.Exec(item.GUID, title, item.Link, article.Excerpt, content, pubDate, author, image, feed.Title)
-		if err != nil {
-			if sqliteErr, ok := err.(sqlite3.Error); ok {
-				if sqliteErr.Code == sqlite3.ErrConstraint {
-					continue
-				}
+	res, err = fetchQuery.newPost.Exec(item.GUID, title, item.Link, article.Excerpt, content, pubDate, author, image, feed.Title)
+	if err != nil {
+		if sqliteErr, ok := err.(sqlite3.Error); ok {
+			if sqliteErr.Code == sqlite3.ErrConstraint {
+				return true
 			}
-			log.Printf("fetchFeedPosts: create post %s: %v", item.Link, err)
-			continue
 		}
+		log.Printf("fetchFeedPosts: create post %s: %v", item.Link, err)
+		return true
+	}
 
-		rowid, err = res.LastInsertId()
+	rowid, err = res.LastInsertId()
 
-		for _, category := range item.Categories {
-			_, err = fetchQuery.newPostCategory.Exec(rowid, category)
-			if err != nil {
-				log.Printf("fetchFeedPosts: add post category %s to %s: %v", category, item.Link, err)
-				continue
-			}
+	for _, category := range item.Categories {
+		_, err = fetchQuery.newPostCategory.Exec(rowid, category)
+		if err != nil {
+			log.Printf("fetchFeedPosts: add post category %s to %s: %v", category, item.Link, err)
+			return true
 		}
 	}
+
+	return true
 }
 
 func convertArgs(args []string) []interface{} {
@@ -289,6 +334,7 @@ func main() {
 	defer db.Close()
 
 	if initDb {
+		log.Printf("creating new database")
 		_, err := db.Exec(`
 		CREATE TABLE Feed (
 			Title TEXT NOT NULL,
@@ -296,7 +342,10 @@ func main() {
 			"Type" INTEGER NOT NULL,
 			"Language" TEXT,
 			ImageUrl TEXT,
-			ImageTitle TEXT, Description TEXT NOT NULL,
+			ImageTitle TEXT, 
+			Description TEXT NOT NULL,
+			IntervalSeconds INTEGER DEFAULT 3600,
+			DelaySeconds INTEGER DEFAULT 30,
 			CONSTRAINT Feed_PK PRIMARY KEY (Title)
 		);
 
@@ -334,11 +383,15 @@ func main() {
 		}
 	}
 
+	log.Printf("init fetch queries")
 	initFetchQuery(db)
 	defer closeFetchQuery()
 
-	go fetchFeeds(feedParser, policy, db)
+	log.Printf("spawning fetch threads")
+	feedChannels := make(map[string]chan bool)
+	spawnThreadsForFeedsInDB(feedParser, policy, feedChannels)
 
+	log.Printf("initializing frontend")
 	// Create a new engine
 	viewsPath := os.Getenv("VIEWS_PATH")
 	if viewsPath == "" {
@@ -975,6 +1028,15 @@ func main() {
 		}
 		defer rows.Close()
 
+		type Feed struct {
+			Title       string
+			Description string
+			Link        string
+			Language    string
+			ImageUrl    string
+			ImageTitle  string
+		}
+
 		var feeds []Feed
 
 		for rows.Next() {
@@ -1038,7 +1100,10 @@ func main() {
 			})
 		}
 
-		go fetchFeedPosts(feedParser, policy, feedLink)
+		// NOTE: assume that a new feed was created (none existed before and db query was succesfull)
+		shouldClose := make(chan bool)
+		feedChannels[rssUrl] = shouldClose
+		go fetchPostsPeriodicallyFromFeed(feedParser, policy, rssUrl, time.Duration(3600)*time.Second, time.Duration(30)*time.Second, shouldClose)
 
 		return c.Render("status", fiber.Map{
 			"Title":       "Added Feed",
@@ -1054,7 +1119,9 @@ func main() {
 		"Link",
 		"Language",
 		ImageUrl,
-		ImageTitle
+		ImageTitle,
+		IntervalSeconds,
+		DelaySeconds
 	FROM
 		Feed
 	WHERE
@@ -1117,9 +1184,22 @@ func main() {
 
 		row := feedQuery.QueryRow(title)
 
-		var feed Feed
+		type Feed struct {
+			Title       string
+			Description string
+			Link        string
+			Type        int
+			Language    string
+			ImageUrl    string
+			ImageTitle  string
+			Interval    string
+			Delay       string
+		}
 
-		err = row.Scan(&feed.Title, &feed.Description, &feed.Link, &feed.Language, &feed.ImageUrl, &feed.ImageTitle)
+		var feed Feed
+		var intervalSeconds, delaySeconds int
+
+		err = row.Scan(&feed.Title, &feed.Description, &feed.Link, &feed.Language, &feed.ImageUrl, &feed.ImageTitle, &intervalSeconds, &delaySeconds)
 		if err != nil {
 			log.Printf("GET /feed/:title: scan feed row: %v", err)
 			return c.Render("status", fiber.Map{
@@ -1128,6 +1208,9 @@ func main() {
 				"Description": fmt.Sprintf("Couldn't load data for \"%s\"", title),
 			})
 		}
+
+		feed.Interval = (time.Duration(intervalSeconds) * time.Second).String()
+		feed.Delay = (time.Duration(delaySeconds) * time.Second).String()
 
 		rows, err := feedCategoriesByTitleQuery.Query(title)
 		if err != nil {
@@ -1202,7 +1285,9 @@ func main() {
 	SET
 		Title = ?,
 		Description = ?,
-		"Link" = ?
+		"Link" = ?,
+		IntervalSeconds = ?,
+		DelaySeconds = ?
 	WHERE
 		Title = ?;
 	`)
@@ -1273,13 +1358,16 @@ func main() {
 				})
 			}
 
+			feedChannels[title] <- true
+			delete(feedChannels, title)
+
 			return c.Render("status", fiber.Map{
 				"Title":       "Deleted Feed",
 				"Name":        "Deleted Feed Successfully",
 				"Description": fmt.Sprintf("Deleted feed with title %v", title),
 			})
 		default:
-			if len(form.Value["title"]) == 0 || len(form.Value["description"]) == 0 || len(form.Value["link"]) == 0 {
+			if len(form.Value["title"]) == 0 || len(form.Value["description"]) == 0 || len(form.Value["link"]) == 0 || len(form.Value["interval"]) == 0 || len(form.Value["delay"]) == 0 {
 				return c.Render("status", fiber.Map{
 					"Title":       "Error",
 					"Name":        "Failed Updating Feed",
@@ -1287,7 +1375,28 @@ func main() {
 				})
 			}
 
-			_, err = updateFeedQuery.Exec(form.Value["title"][0], form.Value["description"][0], form.Value["link"][0], title)
+			log.Print("update feed start")
+
+			interval, err := time.ParseDuration(form.Value["interval"][0])
+			if err != nil {
+				return c.Render("status", fiber.Map{
+					"Title":       "Error",
+					"Name":        "Failed Updating Feed",
+					"Description": "Incomplete form data",
+				})
+			}
+			delay, err := time.ParseDuration(form.Value["delay"][0])
+			if err != nil {
+				return c.Render("status", fiber.Map{
+					"Title":       "Error",
+					"Name":        "Failed Updating Feed",
+					"Description": "Incomplete form data",
+				})
+			}
+
+			log.Print("update feed in db")
+
+			_, err = updateFeedQuery.Exec(form.Value["title"][0], form.Value["description"][0], form.Value["link"][0], interval.Seconds(), delay.Seconds(), title)
 			if err != nil {
 				log.Printf("POST /feed/:title: update feed: %v", err)
 				return c.Render("status", fiber.Map{
@@ -1297,11 +1406,19 @@ func main() {
 				})
 			}
 
+			log.Print("close channel")
+			feedChannels[title] <- true
+			log.Print("start thread")
+			go fetchPostsPeriodicallyFromFeed(feedParser, policy, form.Value["title"][0], interval, delay, feedChannels[title])
+			feedChannels[form.Value["title"][0]] = feedChannels[title]
+			delete(feedChannels, title)
+
 			// the query rows have to be closed before making further operations on the same table
 			var addCat, removeCat []string
 
 			addCat = form.Value["category"]
 
+			log.Print("get previous categories")
 			{
 				rows, err := feedCategoriesByTitleQuery.Query(title)
 				if err != nil {
@@ -1342,6 +1459,7 @@ func main() {
 				}
 			}
 
+			log.Print("update categories")
 			for _, category := range addCat {
 				if category == "" {
 					continue
@@ -1359,8 +1477,7 @@ func main() {
 				}
 			}
 
-			go fetchFeedPosts(feedParser, policy, form.Value["link"][0])
-
+			log.Print("render response")
 			return c.Render("status", fiber.Map{
 				"Title":       "Updated Feed",
 				"Name":        "Updated Feed Successfully",

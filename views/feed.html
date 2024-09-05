@@ -13,6 +13,8 @@
             <option value="{{ . }}"></option>
             {{ end }}
         </datalist>
+        <label class="main">Update Interval: <input name="interval" value="{{ .Feed.Interval }}" /></label><br />
+        <label class="main">Request Delay: <input name="delay" value="{{ .Feed.Delay }}" /></label><br />
         <fieldset>
             <legend>Categories:</legend>
             <label class="new-category">
