@@ -344,8 +344,6 @@ func main() {
 			ImageUrl TEXT,
 			ImageTitle TEXT, 
 			Description TEXT NOT NULL,
-			IntervalSeconds INTEGER DEFAULT 3600,
-			DelaySeconds INTEGER DEFAULT 30,
 			CONSTRAINT Feed_PK PRIMARY KEY (Title)
 		);
 
@@ -380,6 +378,45 @@ func main() {
 		`)
 		if err != nil {
 			log.Fatalf("main: init database: %v", err)
+		}
+	}
+
+	rows := db.QueryRow("PRAGMA user_version;")
+
+	var version int
+	err = rows.Scan(&version)
+
+	if err != nil {
+		log.Fatalf("main: get database version: %v", err)
+	}
+
+	newestVersion := 1
+	if version > newestVersion {
+		log.Fatalf("main: database version is too high")
+	} else if version != newestVersion {
+		log.Printf("upgrading database from version %v to %v", version, newestVersion)
+		tx, err := db.Begin()
+
+		if err != nil {
+			log.Fatalf("main: couldn't start transaction: %v", err)
+		}
+
+		switch version {
+		case 0:
+			tx.Exec("ALTER TABLE Feed ADD COLUMN IntervalSeconds INTEGER DEFAULT 3600")
+			tx.Exec("ALTER TABLE Feed ADD COLUMN DelaySeconds INTEGER DEFAULT 30")
+		}
+
+		err = tx.Commit()
+
+		if err != nil {
+			log.Fatalf("main: transaction failed: %v", err)
+		}
+
+		_, err = db.Exec("PRAGMA user_version = ?;", newestVersion)
+
+		if err != nil {
+			log.Fatalf("main: update database version: %v", err)
 		}
 	}
 
