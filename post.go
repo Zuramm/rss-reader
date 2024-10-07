@@ -12,6 +12,8 @@ import (
 )
 
 func registerPostEndpoint(db *sql.DB, app *fiber.App) {
+	dbg := "registerPostEndpoint"
+
 	postStmt, err := db.Prepare(`
 	SELECT
 		Post.Title,
@@ -30,7 +32,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 		Post.rowid = ?;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare post query: %v", err)
+		log.Fatalf("%v: prepare post query: %v", dbg, err)
 	}
 
 	readPostStmt, err := db.Prepare(`
@@ -42,7 +44,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 		rowid = ?;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare read post query: %v", err)
+		log.Fatalf("%v: prepare read post query: %v", dbg, err)
 	}
 
 	postCategoryStmt, err := db.Prepare(`
@@ -54,10 +56,12 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 		Post_FK = ?;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare post category query: %v", err)
+		log.Fatalf("%v: prepare post category query: %v", dbg, err)
 	}
 
 	app.Get("/post/:id", func(c *fiber.Ctx) error {
+		dbg := "GET /post/<id>"
+
 		var rows *sql.Rows
 		var row *sql.Row
 		var id int
@@ -65,7 +69,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 		id, err = c.ParamsInt("id")
 		if err != nil {
-			log.Printf("GET /post/:id: get title: %v", err)
+			log.Printf("%v: get title: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Getting Feed",
@@ -75,7 +79,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 		_, err = readPostStmt.Exec(id)
 		if err != nil {
-			log.Printf("GET /post/:id: set post as read: %v", err)
+			log.Printf("%v: set post as read: %v", dbg, err)
 		}
 
 		row = postStmt.QueryRow(id)
@@ -96,7 +100,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 		err = row.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedID, &post.FeedTitle, &post.ImageUrl, &post.Language)
 		if err != nil {
-			log.Printf("GET /post/:id: get post data: %v", err)
+			log.Printf("%v: get post data: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title": "Error",
 				"Name":  "Failed Getting Post",
@@ -107,7 +111,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 		rows, err = postCategoryStmt.Query(id)
 		if err != nil {
-			log.Printf("GET /post/:id: get all categories: %v", err)
+			log.Printf("%v: get all categories: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Getting Post",
@@ -119,7 +123,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 			var category string
 			err = rows.Scan(&category)
 			if err != nil {
-				log.Printf("GET /post/:id: get category data: %v", err)
+				log.Printf("%v: get category data: %v", dbg, err)
 				continue
 			}
 
@@ -149,7 +153,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 		rowid = ?;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare post all data query: %v", err)
+		log.Fatalf("%v: prepare post all data query: %v", dbg, err)
 	}
 
 	updatePostAllDataStmt, err := db.Prepare(`
@@ -164,11 +168,13 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 		rowid = ?;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare update post all data query: %v", err)
+		log.Fatalf("%v: prepare update post all data query: %v", dbg, err)
 	}
 
 	// reimport post
 	app.Post("/post/:id", func(c *fiber.Ctx) error {
+		dbg := "POST /post/<id>"
+
 		var row *sql.Row
 		var id int
 		var Title, Link, Content, ImageUrl, Excerpt string
@@ -177,7 +183,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 		id, err = c.ParamsInt("id")
 		if err != nil {
-			log.Printf("POST /post/%v: get post id: %v", id, err)
+			log.Printf("%v: get post id: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Reimporting Post",
@@ -190,7 +196,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 		err = row.Scan(&Title, &Link, &Content, &ImageUrl, &Excerpt)
 		if err != nil {
-			log.Printf("POST /post/%v: getting all post data: %v", id, err)
+			log.Printf("%v: getting all post data: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Reimporting Post",
@@ -201,7 +207,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 		// TODO: Use PostFetcher to parse and update the database.
 		article, err = ParseArticle(Link, 30*time.Second)
 		if err != nil {
-			log.Printf("POST /post/%v: parsing article: %v", id, err)
+			log.Printf("%v: parsing article: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Reimporting Post",
@@ -227,7 +233,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 		_, err = updatePostAllDataStmt.Exec(Title, Content, ImageUrl, Excerpt, id)
 		if err != nil {
-			log.Printf("POST /post/%v: updating post: %v", id, err)
+			log.Printf("%v: updating post: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Reimporting Post",

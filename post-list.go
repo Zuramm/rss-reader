@@ -32,6 +32,8 @@ func convertArgs(args []string) []interface{} {
 }
 
 func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
+	dbg := "registerPostListEndpoint"
+
 	allFeedsTitle, err := db.Prepare(`
 	SELECT
 		rowid,
@@ -42,7 +44,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 		Title ASC;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare all feeds title: %v", err)
+		log.Fatalf("%v: prepare all feeds title: %v", dbg, err)
 	}
 
 	allFeedCategoriesQuery, err := db.Prepare(`
@@ -54,7 +56,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 		Category ASC;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare all feed categories: %v", err)
+		log.Fatalf("%v: prepare all feed categories: %v", dbg, err)
 	}
 
 	allPostCategoriesQuery, err := db.Prepare(`
@@ -70,7 +72,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 		Category ASC;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare all post categories: %v", err)
+		log.Fatalf("%v: prepare all post categories: %v", dbg, err)
 	}
 
 	allPostQueryStr := `
@@ -148,6 +150,8 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 	pageSize := 24
 
 	app.Get("/", func(c *fiber.Ctx) error {
+		dbg := "GET /"
+
 		query := c.Context().QueryArgs()
 
 		type TitleSelected struct {
@@ -160,14 +164,14 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 
 		rows, err := allFeedsTitle.Query()
 		if err != nil {
-			log.Printf("GET /: get all feeds: %v", err)
+			log.Printf("%v: get all feeds: %v", dbg, err)
 		} else {
 			for rows.Next() {
 				var id int64
 				var feed string
 				err := rows.Scan(&id, &feed)
 				if err != nil {
-					log.Printf("GET /: get feed data: %v", err)
+					log.Printf("%v: get feed data: %v", dbg, err)
 				}
 
 				isSet := false
@@ -189,13 +193,13 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 
 		rows, err = allFeedCategoriesQuery.Query()
 		if err != nil {
-			log.Printf("GET /: get all feed categories: %v", err)
+			log.Printf("%v: get all feed categories: %v", dbg, err)
 		} else {
 			for rows.Next() {
 				var category string
 				err := rows.Scan(&category)
 				if err != nil {
-					log.Printf("GET /: get feed category data: %v", err)
+					log.Printf("%v: get feed category data: %v", dbg, err)
 				}
 
 				isSet := false
@@ -217,13 +221,13 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 
 		rows, err = allPostCategoriesQuery.Query()
 		if err != nil {
-			log.Printf("GET /: get all post categories: %v", err)
+			log.Printf("%v: get all post categories: %v", dbg, err)
 		} else {
 			for rows.Next() {
 				var category string
 				err := rows.Scan(&category)
 				if err != nil {
-					log.Printf("GET /: get post category data: %v", err)
+					log.Printf("%v: get post category data: %v", dbg, err)
 				}
 
 				isSet := false
@@ -321,7 +325,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 		maxPage := 100_000_000
 		err = row.Scan(&count)
 		if err != nil {
-			log.Printf("GET /: count results: %v", err)
+			log.Printf("%v: count results: %v", dbg, err)
 		}
 
 		if count > 0 {
@@ -334,7 +338,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 
 		rows, err = db.Query(querystr, values...)
 		if err != nil {
-			log.Printf("GET /: get all posts: %v", err)
+			log.Printf("%v: get all posts: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title": "Error",
 				"Name":  "Failed Getting Posts",
@@ -361,7 +365,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 			var post Post
 			err := rows.Scan(&post.Rowid, &post.Title, &post.Excerpt, &post.PublicationDate, &post.IsRead, &post.Author, &post.FeedID, &post.FeedTitle, &post.ImageUrl, &post.Language)
 			if err != nil {
-				log.Printf("GET /: get post data: %v", err)
+				log.Printf("%v: get post data: %v", dbg, err)
 				continue
 			}
 

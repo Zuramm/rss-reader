@@ -27,6 +27,8 @@ func removeOrdered[Type any](slice []Type, s int) []Type {
 }
 
 func main() {
+	dbg := "main"
+
 	feedParser := gofeed.NewParser()
 
 	policy := bluemonday.UGCPolicy()
@@ -35,17 +37,17 @@ func main() {
 	if dbPath == "" {
 		dbPath = "./feeds.db"
 	}
-	log.Printf("open database %v", dbPath)
+	log.Printf("%v: open database %v", dbg, dbPath)
 	_, err := os.Stat(dbPath)
 	initDb := os.IsNotExist(err)
 	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
-		log.Fatalf("main: open database: %v", err)
+		log.Fatalf("%v: open database: %v", dbg, err)
 	}
 	defer db.Close()
 
 	if initDb {
-		log.Printf("creating new database")
+		log.Printf("%v: creating new database", dbg)
 		_, err := db.Exec(`
 		CREATE TABLE Feed (
 			Title TEXT NOT NULL,
@@ -88,7 +90,7 @@ func main() {
 		);
 		`)
 		if err != nil {
-			log.Fatalf("main: init database: %v", err)
+			log.Fatalf("%v: init database: %v", dbg, err)
 		}
 	}
 
@@ -98,18 +100,18 @@ func main() {
 	err = rows.Scan(&version)
 
 	if err != nil {
-		log.Fatalf("main: get database version: %v", err)
+		log.Fatalf("%v: get database version: %v", dbg, err)
 	}
 
 	newestVersion := 2
 	if version > newestVersion {
-		log.Fatalf("main: database version is too high")
+		log.Fatalf("%v: database version is too high", dbg)
 	} else if version != newestVersion {
-		log.Printf("upgrading database from version %v to %v", version, newestVersion)
+		log.Printf("%v: upgrading database from version %v to %v", dbg, version, newestVersion)
 		tx, err := db.Begin()
 
 		if err != nil {
-			log.Fatalf("main: couldn't start transaction: %v", err)
+			log.Fatalf("%v: couldn't start transaction: %v", dbg, err)
 		}
 
 		switch version {
@@ -119,7 +121,7 @@ func main() {
 			ALTER TABLE Feed ADD COLUMN DelaySeconds INTEGER DEFAULT 30;
 			`)
 			if err != nil {
-				log.Fatalf("main: couldn't migrate from version 0: %v", err)
+				log.Fatalf("%v: couldn't migrate from version 0: %v", dbg, err)
 			}
 		case 1:
 			_, err = tx.Exec(`
@@ -183,7 +185,7 @@ func main() {
 			ALTER TABLE Post_TEMP RENAME TO Post;
 			`)
 			if err != nil {
-				log.Fatalf("main: couldn't migrate from version 1: %v", err)
+				log.Fatalf("%v: couldn't migrate from version 1: %v", dbg, err)
 			}
 		}
 
@@ -192,24 +194,24 @@ func main() {
 		_, err = tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", newestVersion))
 
 		if err != nil {
-			log.Fatalf("main: update database version: %v", err)
+			log.Fatalf("%v: update database version: %v", dbg, err)
 		}
 
 		err = tx.Commit()
 
 		if err != nil {
-			log.Fatalf("main: transaction failed: %v", err)
+			log.Fatalf("%v: transaction failed: %v", dbg, err)
 		}
 	}
 
-	log.Printf("init fetch queries")
+	log.Printf("%v: init fetch queries", dbg)
 
-	log.Printf("spawning fetch threads")
+	log.Printf("%v: spawning fetch threads", dbg)
 
 	pf := NewPostFetcher(feedParser, policy, db)
 	pf.spawnThreadsFromDB(db)
 
-	log.Printf("initializing frontend")
+	log.Printf("%v: initializing frontend", dbg)
 	// Create a new engine
 	viewsPath := os.Getenv("VIEWS_PATH")
 	if viewsPath == "" {

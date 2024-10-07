@@ -112,6 +112,8 @@ func (pf PostFetcher) spawnThreadsFromDB(db *sql.DB) {
 }
 
 func (pf PostFetcher) spawnThread(feedID int64, link string, interval time.Duration, delay time.Duration) {
+	dbg := "spawnThread"
+
 	shouldClose, ok := pf.channels[feedID]
 	if ok {
 		shouldClose <- true
@@ -125,7 +127,7 @@ func (pf PostFetcher) spawnThread(feedID int64, link string, interval time.Durat
 	for {
 		feed, err = pf.feedParser.ParseURL(link)
 		if err != nil {
-			log.Printf("fetchPostsPeriodicallyFromFeed: parse feed %v: %v", link, err)
+			log.Printf("%v: parse feed %v: %v", dbg, link, err)
 			return
 		}
 
@@ -176,6 +178,8 @@ func (pf PostFetcher) KillThread(feedID int64) {
 }
 
 func (pf PostFetcher) fetchPost(feedID int64, item *gofeed.Item) bool {
+	dbg := "fetchPost"
+
 	var article readability.Article
 	var res sql.Result
 	var row *sql.Row
@@ -188,7 +192,7 @@ func (pf PostFetcher) fetchPost(feedID int64, item *gofeed.Item) bool {
 	if err == nil {
 		return false
 	} else if err != sql.ErrNoRows {
-		log.Printf("fetchPost: check if post exists: %v", err)
+		log.Printf("%v: check if post exists: %v", dbg, err)
 		return false
 	}
 
@@ -196,7 +200,7 @@ func (pf PostFetcher) fetchPost(feedID int64, item *gofeed.Item) bool {
 
 	article, err = ParseArticle(item.Link, 30*time.Second)
 	if err != nil {
-		log.Printf("fetchPost: parse post %s: %v", item.Link, err)
+		log.Printf("%v: parse post %s: %v", dbg, item.Link, err)
 		return true
 	}
 
@@ -242,7 +246,7 @@ func (pf PostFetcher) fetchPost(feedID int64, item *gofeed.Item) bool {
 				return true
 			}
 		}
-		log.Printf("fetchPost: create post %s: %v", item.Link, err)
+		log.Printf("%v: create post %s: %v", dbg, item.Link, err)
 		return true
 	}
 
@@ -251,7 +255,7 @@ func (pf PostFetcher) fetchPost(feedID int64, item *gofeed.Item) bool {
 	for _, category := range item.Categories {
 		_, err = pf.newCategoryStmt.Exec(rowid, category)
 		if err != nil {
-			log.Printf("fetchPost: add post category %s to %s: %v", category, item.Link, err)
+			log.Printf("%v: add post category %s to %s: %v", dbg, category, item.Link, err)
 			return true
 		}
 	}

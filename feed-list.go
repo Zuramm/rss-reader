@@ -10,6 +10,8 @@ import (
 )
 
 func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
+	dbg := "registerFeedListEndpoint"
+
 	allFeedsStmt, err := db.Prepare(`
 	SELECT
 		rowid,
@@ -25,13 +27,15 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 		Title ASC;
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare all feeds query: %v", err)
+		log.Fatalf("%v: prepare all feeds query: %v", dbg, err)
 	}
 
 	app.Get("/feed", func(c *fiber.Ctx) error {
+		dbg := "GET /feed"
+
 		rows, err := allFeedsStmt.Query()
 		if err != nil {
-			log.Printf("GET /feed: get all feeds: %v", err)
+			log.Printf("%v: get all feeds: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title": "Error",
 				"Name":  "Failed Loading Feeds",
@@ -55,7 +59,7 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 			var feed Feed
 			err := rows.Scan(&feed.ID, &feed.Title, &feed.Description, &feed.Link, &feed.Language, &feed.ImageUrl, &feed.ImageTitle)
 			if err != nil {
-				log.Printf("GET /feed: get feed data: %v", err)
+				log.Printf("%v: get feed data: %v", dbg, err)
 				continue
 			}
 			feeds = append(feeds, feed)
@@ -75,10 +79,12 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 		    (?,     ?,        ?,       ?,    ?,        ?,        ?         );
 	`)
 	if err != nil {
-		log.Fatalf("main: prepare new feed query: %v", err)
+		log.Fatalf("%v: prepare new feed query: %v", dbg, err)
 	}
 
 	app.Post("/feed", func(c *fiber.Ctx) error {
+		dbg := "POST /feed"
+
 		rssUrl := c.FormValue("url")
 		if rssUrl == "" {
 			return c.Render("status", fiber.Map{
@@ -90,7 +96,7 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 		feed, err := pf.feedParser.ParseURL(rssUrl)
 		if err != nil {
-			log.Printf("POST /feed: parse feed: %v", err)
+			log.Printf("%v: parse feed: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":  "Error",
 				"Name":   "Failed to Create Feed",
@@ -105,7 +111,7 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 		res, err := newFeedStmt.Exec(feed.Title, feed.Description, feedLink, 0, feed.Language, "", "") // feed.Image.URL, feed.Image.Title)
 		if err != nil {
-			log.Printf("POST /feed: add feed: %v", err)
+			log.Printf("%v: add feed: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed to Create Feed",
@@ -115,7 +121,7 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 		id, err := res.LastInsertId()
 		if err != nil {
-			log.Printf("POST /feed: get new id: %v", err)
+			log.Printf("%v: get new id: %v", dbg, err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed to Create Feed",
