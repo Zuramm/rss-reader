@@ -12,6 +12,7 @@ import (
 func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 	allFeedsStmt, err := db.Prepare(`
 	SELECT
+		rowid,
 		Title,
 		Description,
 		"Link",
@@ -39,6 +40,7 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 		defer rows.Close()
 
 		type Feed struct {
+			ID          int
 			Title       string
 			Description string
 			Link        string
@@ -51,7 +53,7 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 		for rows.Next() {
 			var feed Feed
-			err := rows.Scan(&feed.Title, &feed.Description, &feed.Link, &feed.Language, &feed.ImageUrl, &feed.ImageTitle)
+			err := rows.Scan(&feed.ID, &feed.Title, &feed.Description, &feed.Link, &feed.Language, &feed.ImageUrl, &feed.ImageTitle)
 			if err != nil {
 				log.Printf("GET /feed: get feed data: %v", err)
 				continue
@@ -67,8 +69,10 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 	})
 
 	newFeedStmt, err := db.Prepare(`
-	INSERT INTO Feed(Title, Description, Link, Type, Language, ImageUrl, ImageTitle)
-	    VALUES      (?,     ?,        ?,       ?,    ?,        ?,        ?         )
+	INSERT INTO 
+		Feed(Title, Description, Link, Type, Language, ImageUrl, ImageTitle)
+	VALUES
+		    (?,     ?,        ?,       ?,    ?,        ?,        ?         );
 	`)
 	if err != nil {
 		log.Fatalf("main: prepare new feed query: %v", err)
@@ -99,7 +103,7 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 			feedLink = rssUrl
 		}
 
-		_, err = newFeedStmt.Exec(feed.Title, feed.Description, feedLink, 0, feed.Language, "", "") // feed.Image.URL, feed.Image.Title)
+		res, err := newFeedStmt.Exec(feed.Title, feed.Description, feedLink, 0, feed.Language, "", "") // feed.Image.URL, feed.Image.Title)
 		if err != nil {
 			log.Printf("POST /feed: add feed: %v", err)
 			return c.Render("status", fiber.Map{
@@ -109,7 +113,17 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 			})
 		}
 
-		pf.spawnThread(rssUrl, 3600*time.Second, 30*time.Second)
+		id, err := res.LastInsertId()
+		if err != nil {
+			log.Printf("POST /feed: get new id: %v", err)
+			return c.Render("status", fiber.Map{
+				"Title":       "Error",
+				"Name":        "Failed to Create Feed",
+				"Description": "Failed database query",
+			})
+		}
+
+		pf.spawnThread(id, rssUrl, 3600*time.Second, 30*time.Second)
 
 		return c.Render("status", fiber.Map{
 			"Title":       "Added Feed",

@@ -101,7 +101,7 @@ func main() {
 		log.Fatalf("main: get database version: %v", err)
 	}
 
-	newestVersion := 1
+	newestVersion := 2
 	if version > newestVersion {
 		log.Fatalf("main: database version is too high")
 	} else if version != newestVersion {
@@ -114,20 +114,91 @@ func main() {
 
 		switch version {
 		case 0:
-			tx.Exec("ALTER TABLE Feed ADD COLUMN IntervalSeconds INTEGER DEFAULT 3600")
-			tx.Exec("ALTER TABLE Feed ADD COLUMN DelaySeconds INTEGER DEFAULT 30")
+			_, err = tx.Exec(`
+			ALTER TABLE Feed ADD COLUMN IntervalSeconds INTEGER DEFAULT 3600;
+			ALTER TABLE Feed ADD COLUMN DelaySeconds INTEGER DEFAULT 30;
+			`)
+			if err != nil {
+				log.Fatalf("main: couldn't migrate from version 0: %v", err)
+			}
+		case 1:
+			_, err = tx.Exec(`
+			CREATE TABLE Feed_TEMP (
+				Title TEXT NOT NULL,
+				Link TEXT NOT NULL,
+				"Type" INTEGER NOT NULL,
+				"Language" TEXT,
+				ImageUrl TEXT,
+				ImageTitle TEXT, 
+				Description TEXT NOT NULL,
+				IntervalSeconds INTEGER DEFAULT 3600,
+				DelaySeconds INTEGER DEFAULT 30
+			);
+
+			CREATE TABLE FeedCategory_TEMP (
+				Feed_FK INTEGER 
+					NOT NULL 
+					REFERENCES Feed(Title) ON DELETE CASCADE ON UPDATE CASCADE,
+				Category TEXT NOT NULL,
+				UNIQUE(Feed_FK, Category) ON CONFLICT REPLACE
+			);
+
+			CREATE TABLE Post_TEMP (
+				GUID TEXT 
+					NOT NULL 
+					UNIQUE ON CONFLICT IGNORE,
+				Title TEXT NOT NULL,
+				Link TEXT NOT NULL,
+				Content TEXT NOT NULL,
+				PublicationDate INTEGER NOT NULL,
+				IsRead INTEGER DEFAULT(0) NOT NULL,
+				Author TEXT,
+				Feed_FK TEXT 
+					NOT NULL
+					REFERENCES Feed (rowid) ON DELETE CASCADE ON UPDATE CASCADE,
+				ImageUrl TEXT,
+				Excerpt TEXT
+			);
+
+			INSERT INTO Feed_TEMP (rowid, Title, Link, "Type", "Language", ImageUrl, ImageTitle, Description)
+				SELECT rowid, Title, Link, "Type", "Language", ImageUrl, ImageTitle, Description FROM Feed;
+
+			INSERT INTO FeedCategory_TEMP (Feed_FK, Category)
+				SELECT Feed.rowid AS Feed_FK, Category FROM FeedCategory LEFT JOIN Feed ON FeedCategory.FeedTitle = Feed.Title;
+
+			INSERT INTO Post_TEMP (rowid, GUID, Title, Link, Content, PublicationDate, IsRead, Author, Feed_FK, ImageUrl, Excerpt)
+				SELECT Post.rowid, GUID, Post.Title, Post.Link, Content, PublicationDate, IsRead, Author, Feed.rowid AS Feed_FK, Post.ImageUrl, Excerpt 
+				FROM Post LEFT JOIN Feed ON Post.FeedTitle = Feed.Title;
+
+			DROP TABLE Feed;
+
+			DROP TABLE FeedCategory;
+			
+			DROP TABLE Post;
+
+			ALTER TABLE Feed_TEMP RENAME TO Feed;
+
+			ALTER TABLE FeedCategory_TEMP RENAME TO FeedCategory;
+
+			ALTER TABLE Post_TEMP RENAME TO Post;
+			`)
+			if err != nil {
+				log.Fatalf("main: couldn't migrate from version 1: %v", err)
+			}
+		}
+
+		// FIX: Using the ? syntax throws a syntax error
+		// _, err = tx.Exec("PRAGMA user_version = ?;", newestVersion)
+		_, err = tx.Exec(fmt.Sprintf("PRAGMA user_version = %d;", newestVersion))
+
+		if err != nil {
+			log.Fatalf("main: update database version: %v", err)
 		}
 
 		err = tx.Commit()
 
 		if err != nil {
 			log.Fatalf("main: transaction failed: %v", err)
-		}
-
-		_, err = db.Exec("PRAGMA user_version = ?;", newestVersion)
-
-		if err != nil {
-			log.Fatalf("main: update database version: %v", err)
 		}
 	}
 

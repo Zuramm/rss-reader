@@ -34,6 +34,7 @@ func convertArgs(args []string) []interface{} {
 func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 	allFeedsTitle, err := db.Prepare(`
 	SELECT
+		rowid,
 		Title
 	FROM
 		Feed
@@ -43,7 +44,6 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 	if err != nil {
 		log.Fatalf("main: prepare all feeds title: %v", err)
 	}
-	defer allFeedsTitle.Close()
 
 	allFeedCategoriesQuery, err := db.Prepare(`
 	SELECT DISTINCT
@@ -56,7 +56,6 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 	if err != nil {
 		log.Fatalf("main: prepare all feed categories: %v", err)
 	}
-	defer allFeedCategoriesQuery.Close()
 
 	allPostCategoriesQuery, err := db.Prepare(`
 	SELECT
@@ -73,22 +72,22 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 	if err != nil {
 		log.Fatalf("main: prepare all post categories: %v", err)
 	}
-	defer allPostCategoriesQuery.Close()
 
 	allPostQueryStr := `
 	SELECT
 		Post.rowid,
 		Post.Title,
-		Excerpt,
-		PublicationDate,
-		IsRead,
+		Post.Excerpt,
+		Post.PublicationDate,
+		Post.IsRead,
 		Post.Author,
-		FeedTitle,
+		Feed.rowid,
+		Feed.Title,
 		Post.ImageUrl,
-		Language
+		Feed.Language
 	FROM
 		Post
-	LEFT JOIN Feed ON Post.FeedTitle = Feed.Title
+	LEFT JOIN Feed ON Post.Feed_FK = Feed.rowid
 	%s;
 	`
 
@@ -107,20 +106,20 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 	`
 
 	allPostQueryFeedTitleStr := `
-		FeedTitle IN(%s)
+		FeedTitle IN (%s)
 	`
 
 	allPostQueryFeedCategoryStr := `
-	FeedTitle IN(
+	Feed_FK IN (
 		SELECT
-			FeedTitle FROM FeedCategory
+			Feed_FK FROM FeedCategory
 		WHERE
 			Category IN(%s)
 	)
 	`
 
 	allPostQueryPostCategoryStr := `
-	rowid IN(
+	rowid IN (
 		SELECT
 			Post_FK FROM PostCategory
 		WHERE
@@ -161,13 +160,14 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 
 		rows, err := allFeedsTitle.Query()
 		if err != nil {
-			log.Printf("GET /: get all feeds")
+			log.Printf("GET /: get all feeds: %v", err)
 		} else {
 			for rows.Next() {
+				var id int64
 				var feed string
-				err := rows.Scan(&feed)
+				err := rows.Scan(&id, &feed)
 				if err != nil {
-					log.Printf("GET /: get feed data")
+					log.Printf("GET /: get feed data: %v", err)
 				}
 
 				isSet := false
@@ -189,13 +189,13 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 
 		rows, err = allFeedCategoriesQuery.Query()
 		if err != nil {
-			log.Printf("GET /: get all feed categories")
+			log.Printf("GET /: get all feed categories: %v", err)
 		} else {
 			for rows.Next() {
 				var category string
 				err := rows.Scan(&category)
 				if err != nil {
-					log.Printf("GET /: get feed category data")
+					log.Printf("GET /: get feed category data: %v", err)
 				}
 
 				isSet := false
@@ -217,13 +217,13 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 
 		rows, err = allPostCategoriesQuery.Query()
 		if err != nil {
-			log.Printf("GET /: get all post categories")
+			log.Printf("GET /: get all post categories: %v", err)
 		} else {
 			for rows.Next() {
 				var category string
 				err := rows.Scan(&category)
 				if err != nil {
-					log.Printf("GET /: get post category data")
+					log.Printf("GET /: get post category data: %v", err)
 				}
 
 				isSet := false
@@ -349,6 +349,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 			PublicationDate int64
 			IsRead          bool
 			Author          string
+			FeedID          int
 			FeedTitle       string
 			ImageUrl        string
 			Language        string
@@ -358,7 +359,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 
 		for rows.Next() {
 			var post Post
-			err := rows.Scan(&post.Rowid, &post.Title, &post.Excerpt, &post.PublicationDate, &post.IsRead, &post.Author, &post.FeedTitle, &post.ImageUrl, &post.Language)
+			err := rows.Scan(&post.Rowid, &post.Title, &post.Excerpt, &post.PublicationDate, &post.IsRead, &post.Author, &post.FeedID, &post.FeedTitle, &post.ImageUrl, &post.Language)
 			if err != nil {
 				log.Printf("GET /: get post data: %v", err)
 				continue

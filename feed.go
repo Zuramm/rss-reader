@@ -4,8 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
-	"mime/multipart"
-	"net/url"
+	"strconv"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -25,7 +24,7 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 	FROM
 		Feed
 	WHERE
-		Title = ?;
+		rowid = ?;
 	`)
 	if err != nil {
 		log.Fatalf("main: prepare feed query: %v", err)
@@ -41,7 +40,7 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 				FeedCategory
 			WHERE
 				Category = t.Category
-			AND FeedTitle = ?)
+			AND Feed_FK = ?)
 		THEN
 			1
 		ELSE
@@ -68,18 +67,18 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 		log.Fatalf("main: prepare feed languages query: %v", err)
 	}
 
-	app.Get("/feed/:title", func(c *fiber.Ctx) error {
-		title, err := url.PathUnescape(c.Params("title"))
+	app.Get("/feed/:id", func(c *fiber.Ctx) error {
+		id, err := c.ParamsInt("id")
 		if err != nil {
-			log.Printf("GET /feed/:title: get title: %v", err)
+			log.Printf("GET /feed/:id: get id: %v", err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Getting Feed",
-				"Description": "Invalid title",
+				"Description": "Invalid id",
 			})
 		}
 
-		row := feedStmt.QueryRow(title)
+		row := feedStmt.QueryRow(id)
 
 		type Feed struct {
 			Title       string
@@ -98,20 +97,20 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 		err = row.Scan(&feed.Title, &feed.Description, &feed.Link, &feed.Language, &feed.ImageUrl, &feed.ImageTitle, &intervalSeconds, &delaySeconds)
 		if err != nil {
-			log.Printf("GET /feed/:title: scan feed row: %v", err)
+			log.Printf("GET /feed/:id: scan feed row: %v", err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Getting Feed",
-				"Description": fmt.Sprintf("Couldn't load data for \"%s\"", title),
+				"Description": fmt.Sprintf("Couldn't load data for \"%s\"", id),
 			})
 		}
 
 		feed.Interval = (time.Duration(intervalSeconds) * time.Second).String()
 		feed.Delay = (time.Duration(delaySeconds) * time.Second).String()
 
-		rows, err := feedCategoriesByTitleStmt.Query(title)
+		rows, err := feedCategoriesByTitleStmt.Query(id)
 		if err != nil {
-			log.Printf("GET /feed/:title: get feed categories: %v", err)
+			log.Printf("GET /feed/:id: get feed categories: %v", err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Getting Feed",
@@ -131,7 +130,7 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 			var value Item
 			err = rows.Scan(&value.Name, &value.Active)
 			if err != nil {
-				log.Printf("GET /feed/:title: scan feed category data: %v", err)
+				log.Printf("GET /feed/:id: scan feed category data: %v", err)
 				continue
 			}
 
@@ -140,7 +139,7 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 		rows, err = feedLanguagesStmt.Query()
 		if err != nil {
-			log.Printf("GET /feed/:title: get feed categories: %v", err)
+			log.Printf("GET /feed/:id: get feed categories: %v", err)
 		}
 
 		var languageSuggestions []string
@@ -150,7 +149,7 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 				var value string
 				err = rows.Scan(&value)
 				if err != nil {
-					log.Printf("GET /feed/:title: scan feed languages: %v", err)
+					log.Printf("GET /feed/:id: scan feed languages: %v", err)
 				}
 
 				languageSuggestions = append(languageSuggestions, value)
@@ -168,8 +167,10 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 	})
 
 	removeFeedStmt, err := db.Prepare(`
-	DELETE FROM Feed
-	WHERE Title = ?;
+	DELETE FROM
+		Feed
+	WHERE 
+		rowid = ?;
 	`)
 	if err != nil {
 		log.Fatalf("main: prepare remove feed query: %v", err)
@@ -185,47 +186,47 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 		IntervalSeconds = ?,
 		DelaySeconds = ?
 	WHERE
-		Title = ?;
+		rowid = ?;
 	`)
 	if err != nil {
 		log.Fatalf("main: prepare update feed query: %v", err)
 	}
 
 	addFeedCategoryStmt, err := db.Prepare(`
-	INSERT INTO FeedCategory(FeedTitle, Category)
-		VALUES          (?        , ?       )
+	INSERT INTO 
+		FeedCategory(Feed_FK, Category)
+	VALUES
+		            (?      , ?       )
 	`)
 	if err != nil {
 		log.Fatalf("main: prepare add feed category query: %v", err)
 	}
 
 	removeFeedCategoryStmt, err := db.Prepare(`
-	DELETE FROM FeedCategory
-	WHERE FeedTitle = ?
-	AND Category = ?;
+	DELETE FROM
+		FeedCategory
+	WHERE
+		Feed_FK = ?
+		AND Category = ?;
 	`)
 	if err != nil {
 		log.Fatalf("main: prepare remove feed category query: %v", err)
 	}
 
-	app.Post("/feed/:title", func(c *fiber.Ctx) error {
-		var err error
-		var title string
-		var form *multipart.Form
-
-		title, err = url.PathUnescape(c.Params("title"))
+	app.Post("/feed/:id", func(c *fiber.Ctx) error {
+		id, err := strconv.ParseInt(c.Params("id"), 10, 64)
 		if err != nil {
-			log.Printf("POST /feed/:title: get title from param: %v", err)
+			log.Printf("POST /feed/:id: get id from param: %v", err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Feed Operation",
-				"Description": "Invalid feed title",
+				"Description": "Invalid feed id",
 			})
 		}
 
-		form, err = c.MultipartForm()
+		form, err := c.MultipartForm()
 		if err != nil {
-			log.Printf("POST /feed/:title: get multipart form: %v", err)
+			log.Printf("POST /feed/:id: get multipart form: %v", err)
 			return c.Render("status", fiber.Map{
 				"Title":       "Error",
 				"Name":        "Failed Feed Operation",
@@ -241,9 +242,9 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 		switch method {
 		case "delete":
-			_, err = removeFeedStmt.Exec(title)
+			_, err = removeFeedStmt.Exec(id)
 			if err != nil {
-				log.Printf("POST /feed/:title: remove feed %v: %v", title, err)
+				log.Printf("POST /feed/:id: remove feed %v: %v", id, err)
 				return c.Render("status", fiber.Map{
 					"Title":       "Error",
 					"Name":        "Failed to Remove Feed",
@@ -251,12 +252,12 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 				})
 			}
 
-			pf.KillThread(title)
+			pf.KillThread(id)
 
 			return c.Render("status", fiber.Map{
 				"Title":       "Deleted Feed",
 				"Name":        "Deleted Feed Successfully",
-				"Description": fmt.Sprintf("Deleted feed with title %v", title),
+				"Description": fmt.Sprintf("Deleted feed with id %v", id),
 			})
 		default:
 			if len(form.Value["title"]) == 0 || len(form.Value["description"]) == 0 || len(form.Value["link"]) == 0 || len(form.Value["interval"]) == 0 || len(form.Value["delay"]) == 0 {
@@ -288,9 +289,9 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 			log.Print("update feed in db")
 
-			_, err = updateFeedStmt.Exec(form.Value["title"][0], form.Value["description"][0], form.Value["link"][0], interval.Seconds(), delay.Seconds(), title)
+			_, err = updateFeedStmt.Exec(form.Value["title"][0], form.Value["description"][0], form.Value["link"][0], interval.Seconds(), delay.Seconds(), id)
 			if err != nil {
-				log.Printf("POST /feed/:title: update feed: %v", err)
+				log.Printf("POST /feed/:id: update feed: %v", err)
 				return c.Render("status", fiber.Map{
 					"Title":       "Error",
 					"Name":        "Failed Updateting Feed",
@@ -298,8 +299,8 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 				})
 			}
 
-			pf.KillThread(title)
-			pf.spawnThread(form.Value["title"][0], interval, delay)
+			pf.KillThread(id)
+			pf.spawnThread(id, form.Value["link"][0], interval, delay)
 
 			// the query rows have to be closed before making further operations on the same table
 			var addCat, removeCat []string
@@ -308,9 +309,9 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 
 			log.Print("get previous categories")
 			{
-				rows, err := feedCategoriesByTitleStmt.Query(title)
+				rows, err := feedCategoriesByTitleStmt.Query(id)
 				if err != nil {
-					log.Printf("POST /feed/:title: get categories: %v", err)
+					log.Printf("POST /feed/:id: get categories: %v", err)
 					return c.Render("status", fiber.Map{
 						"Title":       "Error",
 						"Name":        "Failed Updateting Feed",
@@ -324,7 +325,7 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 					var isAssignedInTable bool
 					err := rows.Scan(&category, &isAssignedInTable)
 					if err != nil {
-						log.Printf("POST /feed/:title: read category data: %v", err)
+						log.Printf("POST /feed/:id: read category data: %v", err)
 						continue
 					}
 
@@ -353,14 +354,14 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 				if category == "" {
 					continue
 				}
-				_, err := addFeedCategoryStmt.Exec(title, category)
+				_, err := addFeedCategoryStmt.Exec(id, category)
 				if err != nil {
 					log.Printf("POST /feed/:title: add category %v: %v", category, err)
 				}
 			}
 
 			for _, category := range removeCat {
-				_, err := removeFeedCategoryStmt.Exec(title, category)
+				_, err := removeFeedCategoryStmt.Exec(id, category)
 				if err != nil {
 					log.Printf("POST /feed/:title: remove category %v: %v", category, err)
 				}
@@ -370,7 +371,7 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 			return c.Render("status", fiber.Map{
 				"Title":       "Updated Feed",
 				"Name":        "Updated Feed Successfully",
-				"Description": fmt.Sprintf("Updated feed with title %v", title),
+				"Description": fmt.Sprintf("Updated feed with title %v", id),
 			})
 		}
 	})

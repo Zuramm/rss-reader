@@ -1,13 +1,13 @@
 <main class="post">
     <header>
-        {{ if .Post.ImageUrl }}
-        <img src="{{ .Post.ImageUrl }}" alt="" height="300" />
-        {{ end }}
+        <!-- {{ if .Post.ImageUrl }} -->
+        <!-- <img src="{{ .Post.ImageUrl }}" alt="" height="300" /> -->
+        <!-- {{ end }} -->
         <h1 lang="{{ .Post.Language }}">{{ .Post.Title }}</h1>
         <p>
             <a href="{{ .Post.Link }}">Original article</a>
             by {{ .Post.Author }}
-            in <a href="/feed/{{ pathEscape .Post.FeedTitle }}">{{ .Post.FeedTitle }}</a>
+            in <a href="/feed/{{ .Post.FeedID }}">{{ .Post.FeedTitle }}</a>
             at {{ datetime .Date }}
         </p>
         <ul>

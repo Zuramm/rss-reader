@@ -16,7 +16,7 @@
         {{ end }}
         <header>
         <h2>{{ .Title }}</h2>
-        <a href="feed/{{ pathEscape .Title }}">Edit Feed</a>
+        <a href="feed/{{ .ID }}">Edit Feed</a>
         </header>
         <p>{{ .Description }}</p>
     </article>

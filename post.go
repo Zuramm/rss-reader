@@ -16,15 +16,16 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 	SELECT
 		Post.Title,
 		Post.Link,
-		Content,
-		PublicationDate,
-		Author,
-		FeedTitle,
+		Post.Content,
+		Post.PublicationDate,
+		Post.Author,
+		Feed.rowid,
+		Feed.Title,
 		Post.ImageUrl,
-		Language
+		Feed.Language
 	FROM
 		Post
-	LEFT JOIN Feed ON Post.FeedTitle = Feed.Title
+	LEFT JOIN Feed ON Post.Feed_FK = Feed.rowid
 	WHERE
 		Post.rowid = ?;
 	`)
@@ -85,6 +86,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 			Content         string
 			PublicationDate int64
 			Author          string
+			FeedID          int
 			FeedTitle       string
 			ImageUrl        string
 			Language        string
@@ -92,7 +94,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 		var post Post
 
-		err = row.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedTitle, &post.ImageUrl, &post.Language)
+		err = row.Scan(&post.Title, &post.Link, &post.Content, &post.PublicationDate, &post.Author, &post.FeedID, &post.FeedTitle, &post.ImageUrl, &post.Language)
 		if err != nil {
 			log.Printf("GET /post/:id: get post data: %v", err)
 			return c.Render("status", fiber.Map{
@@ -136,14 +138,9 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 
 	postAllDataStmt, err := db.Prepare(`
 	SELECT
-		GUID,
 		Title,
 		Link,
 		Content,
-		PublicationDate,
-		IsRead,
-		Author,
-		FeedTitle,
 		ImageUrl,
 		Excerpt
 	FROM
@@ -159,14 +156,8 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 	UPDATE
 		Post
 	SET
-		GUID = ?,
 		Title = ?,
-		Link = ?,
 		Content = ?,
-		PublicationDate = ?,
-		IsRead = ?,
-		Author = ?,
-		FeedTitle = ?,
 		ImageUrl = ?,
 		Excerpt = ?
 	WHERE
@@ -176,10 +167,11 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 		log.Fatalf("main: prepare update post all data query: %v", err)
 	}
 
+	// reimport post
 	app.Post("/post/:id", func(c *fiber.Ctx) error {
 		var row *sql.Row
-		var id, PublicationDate, IsRead int
-		var GUID, Title, Link, Content, Author, FeedTitle, ImageUrl, Excerpt string
+		var id int
+		var Title, Link, Content, ImageUrl, Excerpt string
 		var article readability.Article
 		var err error
 
@@ -193,9 +185,10 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 			})
 		}
 
+		// NOTE: A query is neccessary to get the link. The other values help make the query simpler.
 		row = postAllDataStmt.QueryRow(id)
 
-		err = row.Scan(&GUID, &Title, &Link, &Content, &PublicationDate, &IsRead, &Author, &FeedTitle, &ImageUrl, &Excerpt)
+		err = row.Scan(&Title, &Link, &Content, &ImageUrl, &Excerpt)
 		if err != nil {
 			log.Printf("POST /post/%v: getting all post data: %v", id, err)
 			return c.Render("status", fiber.Map{
@@ -205,6 +198,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 			})
 		}
 
+		// TODO: Use PostFetcher to parse and update the database.
 		article, err = ParseArticle(Link, 30*time.Second)
 		if err != nil {
 			log.Printf("POST /post/%v: parsing article: %v", id, err)
@@ -231,7 +225,7 @@ func registerPostEndpoint(db *sql.DB, app *fiber.App) {
 			Excerpt = article.Excerpt
 		}
 
-		_, err = updatePostAllDataStmt.Exec(GUID, Title, Link, Content, PublicationDate, IsRead, Author, FeedTitle, ImageUrl, Excerpt, id)
+		_, err = updatePostAllDataStmt.Exec(Title, Content, ImageUrl, Excerpt, id)
 		if err != nil {
 			log.Printf("POST /post/%v: updating post: %v", id, err)
 			return c.Render("status", fiber.Map{
