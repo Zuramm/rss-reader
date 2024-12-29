@@ -123,6 +123,7 @@ func main() {
 			if err != nil {
 				log.Fatalf("%v: couldn't migrate from version 0: %v", dbg, err)
 			}
+			fallthrough
 		case 1:
 			_, err = tx.Exec(`
 			CREATE TABLE Feed_TEMP (
