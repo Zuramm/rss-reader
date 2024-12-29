@@ -31,19 +31,16 @@
       rss-reader = pkgs.buildGoModule {
         pname = "rss-reader";
         inherit version;
-        # In 'nix develop', we don't need a copy of the source tree
-        # in the Nix store.
-        src = ./.;
 
-        # This hash locks the dependencies of this package. It is
-        # necessary because of how Go requires network access to resolve
-        # VCS.  See https://www.tweag.io/blog/2021-03-04-gomod2nix/ for
-        # details. Normally one can build with a fake hash and rely on native Go
-        # mechanisms to tell you what the hash should be or determine what
-        # it should be "out-of-band" with other tooling (eg. gomod2nix).
-        # To begin with it is recommended to set this, but one must
-        # remember to bump this hash when your dependencies change.
-        # vendorHash = pkgs.lib.fakeHash;
+        src = ./.;
+        tags = [
+          "production"
+          "sqlite"
+          "fts5"
+        ];
+        postInstall = ''
+          cp -r public views $out/bin
+        '';
 
         vendorHash = "sha256-h9riGfvC3MBCZuQ+KIIgsIs2LKIF+Y53ExURgvYtW3s=";
       };
