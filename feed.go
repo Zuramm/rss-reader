@@ -306,7 +306,7 @@ func registerFeedEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 			}
 
 			pf.KillThread(id)
-			pf.spawnThread(id, form.Value["link"][0], interval, delay)
+			go pf.regularlyFetchNewPosts(id, form.Value["link"][0], interval, delay)
 
 			// the query rows have to be closed before making further operations on the same table
 			var addCat, removeCat []string

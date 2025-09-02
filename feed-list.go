@@ -129,7 +129,7 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 			})
 		}
 
-		pf.spawnThread(id, rssUrl, 3600*time.Second, 30*time.Second)
+		go pf.regularlyFetchNewPosts(id, rssUrl, 3600*time.Second, 30*time.Second)
 
 		return c.Render("status", fiber.Map{
 			"Title":       "Added Feed",

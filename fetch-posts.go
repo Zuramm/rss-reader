@@ -107,11 +107,11 @@ func (pf PostFetcher) spawnThreadsFromDB(db *sql.DB) {
 	rows.Close()
 
 	for _, ti := range infos {
-		go pf.spawnThread(ti.id, ti.link, ti.interval, ti.delay)
+		go pf.regularlyFetchNewPosts(ti.id, ti.link, ti.interval, ti.delay)
 	}
 }
 
-func (pf PostFetcher) spawnThread(feedID int64, link string, interval time.Duration, delay time.Duration) {
+func (pf PostFetcher) regularlyFetchNewPosts(feedID int64, link string, interval time.Duration, delay time.Duration) {
 	dbg := "spawnThread"
 
 	shouldClose, ok := pf.channels[feedID]
