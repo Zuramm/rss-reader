@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"strings"
 	"time"
 
 	readability "github.com/go-shiori/go-readability"
@@ -124,6 +125,7 @@ func (pf PostFetcher) regularlyFetchNewPosts(feedID int64, link string, interval
 	var feed *gofeed.Feed
 	var err error
 
+main:
 	for {
 		feed, err = pf.feedParser.ParseURL(link)
 		if err != nil {
@@ -138,16 +140,14 @@ func (pf PostFetcher) regularlyFetchNewPosts(feedID int64, link string, interval
 
 			if didFetch {
 				delayChan := time.After(delay)
-				for {
-					select {
-					case ud := <-shouldClose:
-						if ud {
-							return
-						} else {
-							skipInterval = true
-						}
-					case <-delayChan:
+				select {
+				case ud := <-shouldClose:
+					if ud {
+						break main
+					} else {
+						skipInterval = true
 					}
+				case <-delayChan:
 				}
 			}
 		}
@@ -156,7 +156,7 @@ func (pf PostFetcher) regularlyFetchNewPosts(feedID int64, link string, interval
 			select {
 			case ud := <-shouldClose:
 				if ud {
-					return
+					break main
 				}
 			case <-time.After(interval):
 			}
@@ -164,11 +164,14 @@ func (pf PostFetcher) regularlyFetchNewPosts(feedID int64, link string, interval
 			select {
 			case ud := <-shouldClose:
 				if ud {
-					return
+					break main
 				}
 			default:
 			}
 		}
+	}
+	for len(shouldClose) > 0 {
+		<-shouldClose
 	}
 }
 
@@ -186,22 +189,36 @@ func (pf PostFetcher) fetchPost(feedID int64, item *gofeed.Item) bool {
 	var rowid int64
 	var err error
 
-	row = pf.postStmt.QueryRow(item.GUID)
+	didFetch := false
+	GUID := item.GUID
+
+	if strings.TrimSpace(GUID) == "" {
+		GUID = item.Link
+	}
+
+	if strings.TrimSpace(GUID) == "" {
+		log.Printf("%v: missing GUID", dbg)
+		return didFetch
+	}
+
+	row = pf.postStmt.QueryRow(GUID)
 
 	err = row.Scan(&rowid)
 	if err == nil {
-		return false
+		log.Printf("%v: exists: %v %v", dbg, GUID, item.Title)
+		return didFetch
 	} else if err != sql.ErrNoRows {
 		log.Printf("%v: check if post exists: %v", dbg, err)
-		return false
+		return didFetch
 	}
 
 	log.Printf("parsing post %v", item.Title)
 
 	article, err = ParseArticle(item.Link, 30*time.Second)
+	didFetch = true
 	if err != nil {
 		log.Printf("%v: parse post %s: %v", dbg, item.Link, err)
-		return true
+		return didFetch
 	}
 
 	var title string
@@ -239,15 +256,15 @@ func (pf PostFetcher) fetchPost(feedID int64, item *gofeed.Item) bool {
 		author = item.Author.Name
 	}
 
-	res, err = pf.newPostStmt.Exec(item.GUID, title, item.Link, article.Excerpt, content, pubDate, author, image, feedID)
+	res, err = pf.newPostStmt.Exec(GUID, title, item.Link, article.Excerpt, content, pubDate, author, image, feedID)
 	if err != nil {
 		if sqliteErr, ok := err.(sqlite3.Error); ok {
 			if sqliteErr.Code == sqlite3.ErrConstraint {
-				return true
+				return didFetch
 			}
 		}
 		log.Printf("%v: create post %s: %v", dbg, item.Link, err)
-		return true
+		return didFetch
 	}
 
 	rowid, err = res.LastInsertId()
@@ -256,9 +273,9 @@ func (pf PostFetcher) fetchPost(feedID int64, item *gofeed.Item) bool {
 		_, err = pf.newCategoryStmt.Exec(rowid, category)
 		if err != nil {
 			log.Printf("%v: add post category %s to %s: %v", dbg, category, item.Link, err)
-			return true
+			return didFetch
 		}
 	}
 
-	return true
+	return didFetch
 }
