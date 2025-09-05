@@ -15,8 +15,12 @@
 
 <body>
     <nav class="page-header">
-        <a href="/">All Posts</a>
-        <a href="/feed">All Feeds</a>
+        <a class="button {{ if eq .Tab "post-list" }}primary{{else}}secondary{{ end }}" href="/">
+            All Posts
+        </a>
+        <a class="button {{ if eq .Tab "feed-list" }}primary{{else}}secondary{{ end }}" href="/feed">
+            All Feeds
+        </a>
     </nav>
     {{ embed }}
 </body>

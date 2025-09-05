@@ -68,12 +68,13 @@ func registerFeedListEndpoint(db *sql.DB, app *fiber.App, pf *PostFetcher) {
 		return c.Render("feedList", fiber.Map{
 			"Styles": []string{"/feed-list.css"},
 			"Title":  "All Feeds",
+			"Tab":    "feed-list",
 			"Feeds":  feeds,
 		})
 	})
 
 	newFeedStmt, err := db.Prepare(`
-	INSERT INTO 
+	INSERT INTO
 		Feed(Title, Description, Link, Type, Language, ImageUrl, ImageTitle)
 	VALUES
 		    (?,     ?,        ?,       ?,    ?,        ?,        ?         );

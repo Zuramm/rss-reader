@@ -376,6 +376,7 @@ func registerPostListEndpoint(db *sql.DB, app *fiber.App) {
 		return c.Render("postList", fiber.Map{
 			"Styles":         []string{"/post-list.css"},
 			"Title":          "All Posts",
+			"Tab":            "post-list",
 			"FeedCategories": feedCategories,
 			"PostCategories": postCategories,
 			"Feeds":          feeds,

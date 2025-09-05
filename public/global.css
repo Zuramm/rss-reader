@@ -7,18 +7,55 @@ a {
     color: var(--color-blue-500);
 }
 
-a:visited {
-    color: var(--color-purple-500);
-}
-
 .page-header {
-    padding: var(--size-2);
-    background-color: var(--color-grey-200);
     font-family: var(--font-sans);
+    padding: 0 var(--size-2);
+    height: var(--size-14);
+    max-width: var(--width-xl);
+    margin-left: auto;
+    margin-right: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
 }
 
-.page-header > * {
+.page-header::before {
+    content: "";
+    position: absolute;
+    top: var(--size-14);
+    left: 0;
+    right: 0;
+    border-bottom: 1px solid var(--color-grey-800);
+}
+
+.page-header>* {
     margin-right: var(--size-2);
+}
+
+.button {
+    padding: var(--size-2) var(--size-4);
+    border-radius: var(--radius-md);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    text-decoration: none;
+    transition: background-color 0.2s var(--ease-in-out-expo);
+}
+
+.button.primary {
+    background-color: var(--color-grey-800);
+    color: var(--color-grey-50);
+}
+
+.button.primary:hover {
+    background-color: var(--color-grey-700);
+}
+
+.button.secondary {
+    color: var(--color-grey-900);
+}
+
+.button.secondary:hover {
+    background-color: var(--color-grey-100);
 }
 
 .status {
@@ -34,7 +71,24 @@ a:visited {
         color: var(--color-grey-50);
     }
 
-    .page-header {
-        background-color: var(--color-grey-700);
+    a {
+        color: var(--color-blue-500);
+    }
+
+    .button.primary {
+        background-color: var(--color-grey-50);
+        color: var(--color-black);
+    }
+
+    .button.primary:hover {
+        background-color: var(--color-grey-100);
+    }
+
+    .button.secondary {
+        color: var(--color-grey-50);
+    }
+
+    .button.secondary:hover {
+        background-color: var(--color-grey-800);
     }
 }
